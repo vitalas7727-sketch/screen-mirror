@@ -108,6 +108,9 @@ public class ScreenCaptureService extends Service {
                 manager.getMediaProjection(
                         resultCode,
                         data);
+        if (mediaProjection == null) {
+    return;
+        }
 
         DisplayMetrics metrics =
                 getResources().getDisplayMetrics();
