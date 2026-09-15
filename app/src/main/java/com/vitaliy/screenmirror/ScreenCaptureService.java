@@ -18,8 +18,8 @@ import android.os.Build;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 
-import java.io.BufferedReader;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -57,7 +57,8 @@ public class ScreenCaptureService extends Service {
             startForeground(
                     1,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            );
         } else {
             startForeground(1, notification);
         }
@@ -66,40 +67,47 @@ public class ScreenCaptureService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
+        startWebServer();
+
         if (intent == null) {
             stopSelf();
             return START_NOT_STICKY;
         }
 
-        int resultCode = intent.getIntExtra("resultCode", -1);
+        int resultCode =
+                intent.getIntExtra("resultCode", -1);
 
         Intent data;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             data = intent.getParcelableExtra(
                     "data",
-                    Intent.class);
+                    Intent.class
+            );
         } else {
             data = intent.getParcelableExtra("data");
         }
 
-        startWebServer();
-
-if (resultCode != -1 && data != null) {
-    startProjection(resultCode, data);
-}
+        if (resultCode != -1 && data != null) {
+            startProjection(resultCode, data);
+        }
 
         return START_NOT_STICKY;
     }
 
-    private void startProjection(int resultCode, Intent data) {
+    private void startProjection(
+            int resultCode,
+            Intent data) {
 
         MediaProjectionManager manager =
                 (MediaProjectionManager)
-                        getSystemService(MEDIA_PROJECTION_SERVICE);
+                        getSystemService(
+                                MEDIA_PROJECTION_SERVICE);
 
         mediaProjection =
-                manager.getMediaProjection(resultCode, data);
+                manager.getMediaProjection(
+                        resultCode,
+                        data);
 
         DisplayMetrics metrics =
                 getResources().getDisplayMetrics();
@@ -108,11 +116,12 @@ if (resultCode != -1 && data != null) {
         int height = metrics.heightPixels;
         int density = metrics.densityDpi;
 
-        imageReader = ImageReader.newInstance(
-                width,
-                height,
-                PixelFormat.RGBA_8888,
-                2);
+        imageReader =
+                ImageReader.newInstance(
+                        width,
+                        height,
+                        PixelFormat.RGBA_8888,
+                        2);
 
         imageReader.setOnImageAvailableListener(
                 reader -> {
@@ -120,7 +129,8 @@ if (resultCode != -1 && data != null) {
                     Image image = null;
 
                     try {
-                        image = reader.acquireLatestImage();
+                        image =
+                                reader.acquireLatestImage();
 
                         if (image == null) {
                             return;
@@ -153,7 +163,9 @@ if (resultCode != -1 && data != null) {
                                         Bitmap.Config.ARGB_8888);
 
                         buffer.rewind();
-                        bitmap.copyPixelsFromBuffer(buffer);
+
+                        bitmap.copyPixelsFromBuffer(
+                                buffer);
 
                         Bitmap cropped =
                                 Bitmap.createBitmap(
@@ -196,34 +208,23 @@ if (resultCode != -1 && data != null) {
                         width,
                         height,
                         density,
-                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        DisplayManager
+                                .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                         imageReader.getSurface(),
                         null,
                         null);
     }
 
-    pprivate void startWebServer() {
+    private void startWebServer() {
 
-    new Thread(() -> {
+        new Thread(() -> {
 
-        try {
-            serverSocket = new ServerSocket(PORT);
+            try {
 
-            while (running) {
-
-                Socket socket = serverSocket.accept();
-
-                new Thread(() -> {
-                    handleClient(socket);
-                }).start();
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }).start();
-    }
+                if (serverSocket != null &&
+                        !serverSocket.isClosed()) {
+                    return;
+                }
 
                 serverSocket =
                         new ServerSocket(PORT);
@@ -244,11 +245,10 @@ if (resultCode != -1 && data != null) {
         }).start();
     }
 
-    private void handleClient(Socket socket) {
+    private void handleClient(
+            Socket socket) {
 
         try {
-
-            socket.setSoTimeout(5000);
 
             BufferedReader reader =
                     new BufferedReader(
@@ -266,6 +266,7 @@ if (resultCode != -1 && data != null) {
             String line;
 
             while ((line = reader.readLine()) != null) {
+
                 if (line.isEmpty()) {
                     break;
                 }
@@ -276,8 +277,11 @@ if (resultCode != -1 && data != null) {
                             socket.getOutputStream());
 
             if (requestLine.contains("GET /stream")) {
+
                 sendStream(output);
+
             } else {
+
                 sendWebPage(output);
             }
 
@@ -292,7 +296,8 @@ if (resultCode != -1 && data != null) {
         }
     }
 
-    private void sendWebPage(OutputStream output)
+    private void sendWebPage(
+            OutputStream output)
             throws Exception {
 
         String html =
@@ -305,7 +310,7 @@ if (resultCode != -1 && data != null) {
                 "html,body{" +
                 "margin:0;" +
                 "padding:0;" +
-                "background:#000;" +
+                "background:black;" +
                 "width:100%;" +
                 "height:100%;" +
                 "overflow:hidden;" +
@@ -334,12 +339,15 @@ if (resultCode != -1 && data != null) {
                 "Connection: close\r\n" +
                 "\r\n";
 
-        output.write(header.getBytes("UTF-8"));
+        output.write(
+                header.getBytes("UTF-8"));
+
         output.write(bytes);
         output.flush();
     }
 
-    private void sendStream(OutputStream output)
+    private void sendStream(
+            OutputStream output)
             throws Exception {
 
         String header =
@@ -347,15 +355,17 @@ if (resultCode != -1 && data != null) {
                 "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
                 "Cache-Control: no-cache, no-store\r\n" +
                 "Pragma: no-cache\r\n" +
-                "Connection: close\r\n" +
                 "\r\n";
 
-        output.write(header.getBytes("UTF-8"));
+        output.write(
+                header.getBytes("UTF-8"));
+
         output.flush();
 
         while (running) {
 
-            byte[] frame = latestFrame;
+            byte[] frame =
+                    latestFrame;
 
             if (frame != null) {
 
@@ -371,6 +381,7 @@ if (resultCode != -1 && data != null) {
                         frameHeader.getBytes("UTF-8"));
 
                 output.write(frame);
+
                 output.write(
                         "\r\n".getBytes("UTF-8"));
 
@@ -390,13 +401,15 @@ if (resultCode != -1 && data != null) {
                     new NotificationChannel(
                             CHANNEL_ID,
                             "Screen Mirror",
-                            NotificationManager.IMPORTANCE_LOW);
+                            NotificationManager
+                                    .IMPORTANCE_LOW);
 
             NotificationManager manager =
                     getSystemService(
                             NotificationManager.class);
 
-            manager.createNotificationChannel(channel);
+            manager.createNotificationChannel(
+                    channel);
         }
     }
 
@@ -418,9 +431,11 @@ if (resultCode != -1 && data != null) {
         }
 
         try {
+
             if (serverSocket != null) {
                 serverSocket.close();
             }
+
         } catch (Exception ignored) {
         }
 
@@ -431,4 +446,4 @@ if (resultCode != -1 && data != null) {
     public IBinder onBind(Intent intent) {
         return null;
     }
-}
+            }
