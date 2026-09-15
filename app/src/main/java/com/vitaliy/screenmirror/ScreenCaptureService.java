@@ -83,11 +83,11 @@ public class ScreenCaptureService extends Service {
             data = intent.getParcelableExtra("data");
         }
 
-        if (resultCode != -1 && data != null) {
-            startProjection(resultCode, data);
-        }
-
         startWebServer();
+
+if (resultCode != -1 && data != null) {
+    startProjection(resultCode, data);
+}
 
         return START_NOT_STICKY;
     }
