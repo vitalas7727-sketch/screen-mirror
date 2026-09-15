@@ -18,8 +18,10 @@ import android.os.Build;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 
+import java.io.BufferedReader;
 import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -37,7 +39,6 @@ public class ScreenCaptureService extends Service {
 
     private volatile byte[] latestFrame;
     private volatile boolean running = true;
-    private long lastFrameTime = 0;
 
     @Override
     public void onCreate() {
@@ -63,21 +64,24 @@ public class ScreenCaptureService extends Service {
     }
 
     @Override
-    public int onStartCommand(
-            Intent intent,
-            int flags,
-            int startId) {
+    public int onStartCommand(Intent intent, int flags, int startId) {
 
         if (intent == null) {
             stopSelf();
             return START_NOT_STICKY;
         }
 
-        int resultCode =
-                intent.getIntExtra("resultCode", -1);
+        int resultCode = intent.getIntExtra("resultCode", -1);
 
-        Intent data =
-                intent.getParcelableExtra("data");
+        Intent data;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            data = intent.getParcelableExtra(
+                    "data",
+                    Intent.class);
+        } else {
+            data = intent.getParcelableExtra("data");
+        }
 
         if (resultCode != -1 && data != null) {
             startProjection(resultCode, data);
@@ -88,19 +92,14 @@ public class ScreenCaptureService extends Service {
         return START_NOT_STICKY;
     }
 
-    private void startProjection(
-            int resultCode,
-            Intent data) {
+    private void startProjection(int resultCode, Intent data) {
 
         MediaProjectionManager manager =
                 (MediaProjectionManager)
-                        getSystemService(
-                                MEDIA_PROJECTION_SERVICE);
+                        getSystemService(MEDIA_PROJECTION_SERVICE);
 
         mediaProjection =
-                manager.getMediaProjection(
-                        resultCode,
-                        data);
+                manager.getMediaProjection(resultCode, data);
 
         DisplayMetrics metrics =
                 getResources().getDisplayMetrics();
@@ -109,12 +108,11 @@ public class ScreenCaptureService extends Service {
         int height = metrics.heightPixels;
         int density = metrics.densityDpi;
 
-        imageReader =
-                ImageReader.newInstance(
-                        width,
-                        height,
-                        PixelFormat.RGBA_8888,
-                        2);
+        imageReader = ImageReader.newInstance(
+                width,
+                height,
+                PixelFormat.RGBA_8888,
+                2);
 
         imageReader.setOnImageAvailableListener(
                 reader -> {
@@ -122,21 +120,11 @@ public class ScreenCaptureService extends Service {
                     Image image = null;
 
                     try {
-                        image =
-                                reader.acquireLatestImage();
+                        image = reader.acquireLatestImage();
 
                         if (image == null) {
                             return;
                         }
-
-                        long now =
-                                System.currentTimeMillis();
-
-                        if (now - lastFrameTime < 100) {
-                            return;
-                        }
-
-                        lastFrameTime = now;
 
                         Image.Plane plane =
                                 image.getPlanes()[0];
@@ -182,7 +170,7 @@ public class ScreenCaptureService extends Service {
 
                         cropped.compress(
                                 Bitmap.CompressFormat.JPEG,
-                                50,
+                                45,
                                 output);
 
                         cropped.recycle();
@@ -191,7 +179,9 @@ public class ScreenCaptureService extends Service {
                                 output.toByteArray();
 
                     } catch (Exception ignored) {
+
                     } finally {
+
                         if (image != null) {
                             image.close();
                         }
@@ -217,9 +207,17 @@ public class ScreenCaptureService extends Service {
         new Thread(() -> {
 
             try {
-                serverSocket = new ServerSocket(PORT);
+
+                if (serverSocket != null &&
+                        !serverSocket.isClosed()) {
+                    return;
+                }
+
+                serverSocket =
+                        new ServerSocket(PORT);
 
                 while (running) {
+
                     Socket socket =
                             serverSocket.accept();
 
@@ -237,22 +235,26 @@ public class ScreenCaptureService extends Service {
     private void handleClient(Socket socket) {
 
         try {
-            java.io.BufferedReader reader =
-                    new java.io.BufferedReader(
-                            new java.io.InputStreamReader(
+
+            socket.setSoTimeout(5000);
+
+            BufferedReader reader =
+                    new BufferedReader(
+                            new InputStreamReader(
                                     socket.getInputStream()));
 
-            String requestLine = reader.readLine();
+            String requestLine =
+                    reader.readLine();
 
             if (requestLine == null) {
                 socket.close();
                 return;
             }
 
-            while (true) {
-                String line = reader.readLine();
+            String line;
 
-                if (line == null || line.isEmpty()) {
+            while ((line = reader.readLine()) != null) {
+                if (line.isEmpty()) {
                     break;
                 }
             }
@@ -261,14 +263,16 @@ public class ScreenCaptureService extends Service {
                     new BufferedOutputStream(
                             socket.getOutputStream());
 
-            if (requestLine.contains("/stream")) {
+            if (requestLine.contains("GET /stream")) {
                 sendStream(output);
             } else {
                 sendWebPage(output);
             }
 
         } catch (Exception ignored) {
+
         } finally {
+
             try {
                 socket.close();
             } catch (Exception ignored) {
@@ -276,23 +280,35 @@ public class ScreenCaptureService extends Service {
         }
     }
 
-    private void sendWebPage(
-            OutputStream output)
+    private void sendWebPage(OutputStream output)
             throws Exception {
 
         String html =
                 "<!DOCTYPE html>" +
-                "<html><head>" +
+                "<html>" +
+                "<head>" +
                 "<meta name='viewport' " +
                 "content='width=device-width'>" +
                 "<style>" +
-                "html,body{margin:0;padding:0;" +
-                "background:black;width:100%;height:100%;}" +
-                "img{width:100%;height:100%;" +
-                "object-fit:contain;}" +
-                "</style></head><body>" +
+                "html,body{" +
+                "margin:0;" +
+                "padding:0;" +
+                "background:#000;" +
+                "width:100%;" +
+                "height:100%;" +
+                "overflow:hidden;" +
+                "}" +
+                "img{" +
+                "width:100%;" +
+                "height:100%;" +
+                "object-fit:contain;" +
+                "}" +
+                "</style>" +
+                "</head>" +
+                "<body>" +
                 "<img src='/stream'>" +
-                "</body></html>";
+                "</body>" +
+                "</html>";
 
         byte[] bytes =
                 html.getBytes("UTF-8");
@@ -302,22 +318,25 @@ public class ScreenCaptureService extends Service {
                 "Content-Type: text/html; charset=UTF-8\r\n" +
                 "Content-Length: " +
                 bytes.length +
-                "\r\n\r\n";
+                "\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
 
         output.write(header.getBytes("UTF-8"));
         output.write(bytes);
         output.flush();
     }
 
-    private void sendStream(
-            OutputStream output)
+    private void sendStream(OutputStream output)
             throws Exception {
 
         String header =
                 "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: multipart/x-mixed-replace;" +
-                "boundary=frame\r\n" +
-                "Cache-Control: no-cache\r\n\r\n";
+                "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
+                "Cache-Control: no-cache, no-store\r\n" +
+                "Pragma: no-cache\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
 
         output.write(header.getBytes("UTF-8"));
         output.flush();
@@ -333,13 +352,16 @@ public class ScreenCaptureService extends Service {
                         "Content-Type: image/jpeg\r\n" +
                         "Content-Length: " +
                         frame.length +
-                        "\r\n\r\n";
+                        "\r\n" +
+                        "\r\n";
 
                 output.write(
                         frameHeader.getBytes("UTF-8"));
 
                 output.write(frame);
-                output.write("\r\n".getBytes("UTF-8"));
+                output.write(
+                        "\r\n".getBytes("UTF-8"));
+
                 output.flush();
             }
 
@@ -356,8 +378,7 @@ public class ScreenCaptureService extends Service {
                     new NotificationChannel(
                             CHANNEL_ID,
                             "Screen Mirror",
-                            NotificationManager
-                                    .IMPORTANCE_LOW);
+                            NotificationManager.IMPORTANCE_LOW);
 
             NotificationManager manager =
                     getSystemService(
@@ -398,4 +419,4 @@ public class ScreenCaptureService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
-  }
+}
