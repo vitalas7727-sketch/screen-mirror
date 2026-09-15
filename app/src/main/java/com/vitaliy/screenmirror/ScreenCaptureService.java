@@ -38,6 +38,7 @@ public class ScreenCaptureService extends Service {
     private ServerSocket serverSocket;
 
     private volatile byte[] latestFrame;
+    private volatile int frameCount = 0;
     private volatile boolean running = true;
 
     @Override
@@ -189,7 +190,8 @@ public class ScreenCaptureService extends Service {
                                 output);
 
                         cropped.recycle();
-latestFrame = output.toByteArray();
+latestFrame = output.toByteArray();frameCount++;
+                        
 android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
 
                     } catch (Exception ignored) {
@@ -366,6 +368,7 @@ private void sendFrame(OutputStream output) throws Exception {
 
         output.write(header.getBytes("UTF-8"));
         output.write(message.getBytes("UTF-8"));
+        html = html.replace("</body>", "<div style='position:fixed;top:10px;left:10px;color:white;font-size:24px'>Кадров: " + frameCount + "</div></body>");
         output.flush();
 
         return;
