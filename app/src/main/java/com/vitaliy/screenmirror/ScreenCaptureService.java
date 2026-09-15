@@ -186,9 +186,8 @@ public class ScreenCaptureService extends Service {
                                 output);
 
                         cropped.recycle();
-
-                        latestFrame =
-                                output.toByteArray();
+latestFrame = output.toByteArray();
+android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
 
                     } catch (Exception ignored) {
 
