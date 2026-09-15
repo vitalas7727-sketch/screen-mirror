@@ -202,16 +202,28 @@ if (resultCode != -1 && data != null) {
                         null);
     }
 
-    private void startWebServer() {
+    pprivate void startWebServer() {
 
-        new Thread(() -> {
+    new Thread(() -> {
 
-            try {
+        try {
+            serverSocket = new ServerSocket(PORT);
 
-                if (serverSocket != null &&
-                        !serverSocket.isClosed()) {
-                    return;
-                }
+            while (running) {
+
+                Socket socket = serverSocket.accept();
+
+                new Thread(() -> {
+                    handleClient(socket);
+                }).start();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }).start();
+    }
 
                 serverSocket =
                         new ServerSocket(PORT);
