@@ -276,14 +276,14 @@ public class ScreenCaptureService extends Service {
                     new BufferedOutputStream(
                             socket.getOutputStream());
 
-            if (requestLine.contains("GET /stream")) {
+if (requestLine.contains("GET /frame.jpg")) {
 
-                sendStream(output);
+    sendFrame(output);
 
-            } else {
+} else {
 
-                sendWebPage(output);
-            }
+    sendWebPage(output);
+}
 
         } catch (Exception ignored) {
 
@@ -345,52 +345,45 @@ public class ScreenCaptureService extends Service {
         output.write(bytes);
         output.flush();
     }
+private void sendFrame(OutputStream output) throws Exception {
 
-    private void sendStream(
-            OutputStream output)
-            throws Exception {
+    byte[] frame = latestFrame;
+
+    if (frame == null) {
+
+        String message = "WAITING_FOR_FRAME";
 
         String header =
-                "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
-                "Cache-Control: no-cache, no-store\r\n" +
-                "Pragma: no-cache\r\n" +
+                "HTTP/1.1 503 Service Unavailable\r\n" +
+                "Content-Type: text/plain; charset=UTF-8\r\n" +
+                "Content-Length: " +
+                message.length() +
+                "\r\n" +
+                "Connection: close\r\n" +
                 "\r\n";
 
-        output.write(
-                header.getBytes("UTF-8"));
-
+        output.write(header.getBytes("UTF-8"));
+        output.write(message.getBytes("UTF-8"));
         output.flush();
 
-        while (running) {
+        return;
+    }
 
-            byte[] frame =
-                    latestFrame;
+    String header =
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: image/jpeg\r\n" +
+            "Content-Length: " +
+            frame.length +
+            "\r\n" +
+            "Cache-Control: no-cache\r\n" +
+            "Connection: close\r\n" +
+            "\r\n";
 
-            if (frame != null) {
-
-                String frameHeader =
-                        "--frame\r\n" +
-                        "Content-Type: image/jpeg\r\n" +
-                        "Content-Length: " +
-                        frame.length +
-                        "\r\n" +
-                        "\r\n";
-
-                output.write(
-                        frameHeader.getBytes("UTF-8"));
-
-                output.write(frame);
-
-                output.write(
-                        "\r\n".getBytes("UTF-8"));
-
-                output.flush();
+    output.write(header.getBytes("UTF-8"));
+    output.write(frame);
+    output.flush();
             }
 
-            Thread.sleep(100);
-        }
-    }
 
     private void createNotificationChannel() {
 
