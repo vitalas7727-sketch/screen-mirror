@@ -251,6 +251,11 @@ public class ScreenCaptureService extends Service {
                         imageReader.getSurface(),
                         null,
                         null);
+                if (virtualDisplay == null) {
+            lastError = "VIRTUAL_DISPLAY_NULL";
+        } else {
+            lastError = "VIRTUAL_DISPLAY_CREATED";
+                }
     }
 
     private void startWebServer() {
