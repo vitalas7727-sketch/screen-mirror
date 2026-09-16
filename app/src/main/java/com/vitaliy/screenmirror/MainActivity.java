@@ -80,6 +80,7 @@ public class MainActivity extends Activity {
                 && resultCode == RESULT_OK
                 && data != null) {
             statusText.setText("OK: RESULT + DATA");
+            
 
             Intent serviceIntent =
                     new Intent(
