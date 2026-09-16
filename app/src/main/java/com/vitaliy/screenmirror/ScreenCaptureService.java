@@ -327,7 +327,12 @@ if (requestLine.contains("GET /frame.jpg")) {
                 "</style>" +
                 "</head>" +
                 "<body>" +
-                "<img src='/stream'>" +
+                "<img src='/frame.jpg' id='screen'>" +
+"<script>" +
+"setInterval(function() {" +
+"document.getElementById('screen').src='/frame.jpg?t=' + Date.now();" +
+"}, 200);" +
+"</script>" +
                 "</body>" +
                 "</html>";
 
