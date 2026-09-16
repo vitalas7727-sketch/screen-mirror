@@ -38,7 +38,6 @@ public class ScreenCaptureService extends Service {
     private ServerSocket serverSocket;
 
     private volatile byte[] latestFrame;
-    private volatile int frameCount = 0;
     private volatile boolean running = true;
 
     @Override
@@ -109,24 +108,25 @@ public class ScreenCaptureService extends Service {
                 manager.getMediaProjection(
                         resultCode,
                         data);
+
         if (mediaProjection == null) {
-    return;
+            return;
         }
+
         mediaProjection.registerCallback(
-        new MediaProjection.Callback() {
-            @Override
-            public void onStop() {
-                running = false;
+                new MediaProjection.Callback() {
+                    @Override
+                    public void onStop() {
+                        running = false;
 
-                if (virtualDisplay != null) {
-                    virtualDisplay.release();
-                    virtualDisplay = null;
-                }
-            }
-        },
-        null
-);
-
+                        if (virtualDisplay != null) {
+                            virtualDisplay.release();
+                            virtualDisplay = null;
+                        }
+                    }
+                },
+                null
+        );
 
         DisplayMetrics metrics =
                 getResources().getDisplayMetrics();
@@ -148,6 +148,7 @@ public class ScreenCaptureService extends Service {
                     Image image = null;
 
                     try {
+
                         image =
                                 reader.acquireLatestImage();
 
@@ -201,16 +202,25 @@ public class ScreenCaptureService extends Service {
 
                         cropped.compress(
                                 Bitmap.CompressFormat.JPEG,
-                                45,
+                                60,
                                 output);
 
                         cropped.recycle();
-latestFrame = output.toByteArray();frameCount++;
-                        
-android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
+
+                        latestFrame =
+                                output.toByteArray();
+
+                        android.util.Log.d(
+                                "ScreenMirror",
+                                "КАДР: " +
+                                latestFrame.length);
 
                     } catch (Exception e) {
-    android.util.Log.e("ScreenMirror", "ОШИБКА КАДРА", e);
+
+                        android.util.Log.e(
+                                "ScreenMirror",
+                                "ОШИБКА КАДРА",
+                                e);
 
                     } finally {
 
@@ -241,11 +251,6 @@ android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
 
             try {
 
-                if (serverSocket != null &&
-                        !serverSocket.isClosed()) {
-                    return;
-                }
-
                 serverSocket =
                         new ServerSocket(PORT);
 
@@ -259,7 +264,12 @@ android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
                     ).start();
                 }
 
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+
+                android.util.Log.e(
+                        "ScreenMirror",
+                        "ОШИБКА СЕРВЕРА",
+                        e);
             }
 
         }).start();
@@ -296,16 +306,21 @@ android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
                     new BufferedOutputStream(
                             socket.getOutputStream());
 
-if (requestLine.contains("GET /frame.jpg")) {
+            if (requestLine.contains("GET /frame.jpg")) {
 
-    sendFrame(output);
+                sendFrame(output);
 
-} else {
+            } else {
 
-    sendWebPage(output);
-}
+                sendWebPage(output);
+            }
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+
+            android.util.Log.e(
+                    "ScreenMirror",
+                    "ОШИБКА CLIENT",
+                    e);
 
         } finally {
 
@@ -343,12 +358,14 @@ if (requestLine.contains("GET /frame.jpg")) {
                 "</style>" +
                 "</head>" +
                 "<body>" +
-                "<img src='/frame.jpg' id='screen'>" +
-"<script>" +
-"setInterval(function() {" +
-"document.getElementById('screen').src='/frame.jpg?t=' + Date.now();" +
-"}, 200);" +
-"</script>" +
+                "<img src='/frame.jpg' " +
+                "id='screen'>" +
+                "<script>" +
+                "setInterval(function(){" +
+                "document.getElementById('screen')" +
+                ".src='/frame.jpg?t=' + Date.now();" +
+                "},500);" +
+                "</script>" +
                 "</body>" +
                 "</html>";
 
@@ -368,48 +385,59 @@ if (requestLine.contains("GET /frame.jpg")) {
                 header.getBytes("UTF-8"));
 
         output.write(bytes);
+
         output.flush();
     }
-private void sendFrame(OutputStream output) throws Exception {
 
-    byte[] frame = latestFrame;
+    private void sendFrame(
+            OutputStream output)
+            throws Exception {
 
-    if (frame == null) {
+        byte[] frame =
+                latestFrame;
 
-        String message = "WAITING_FOR_FRAME";
+        if (frame == null) {
+
+            String message =
+                    "WAITING_FOR_FRAME";
+
+            String header =
+                    "HTTP/1.1 503 Service Unavailable\r\n" +
+                    "Content-Type: text/plain; charset=UTF-8\r\n" +
+                    "Content-Length: " +
+                    message.getBytes("UTF-8").length +
+                    "\r\n" +
+                    "Connection: close\r\n" +
+                    "\r\n";
+
+            output.write(
+                    header.getBytes("UTF-8"));
+
+            output.write(
+                    message.getBytes("UTF-8"));
+
+            output.flush();
+
+            return;
+        }
 
         String header =
-                "HTTP/1.1 503 Service Unavailable\r\n" +
-                "Content-Type: text/plain; charset=UTF-8\r\n" +
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: image/jpeg\r\n" +
                 "Content-Length: " +
-                message.length() +
+                frame.length +
                 "\r\n" +
+                "Cache-Control: no-cache\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
 
-        output.write(header.getBytes("UTF-8"));
-        output.write(message.getBytes("UTF-8"));
-        
+        output.write(
+                header.getBytes("UTF-8"));
+
+        output.write(frame);
+
         output.flush();
-
-        return;
     }
-
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: image/jpeg\r\n" +
-            "Content-Length: " +
-            frame.length +
-            "\r\n" +
-            "Cache-Control: no-cache\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
-
-    output.write(header.getBytes("UTF-8"));
-    output.write(frame);
-    output.flush();
-            }
-
 
     private void createNotificationChannel() {
 
@@ -439,14 +467,17 @@ private void sendFrame(OutputStream output) throws Exception {
 
         if (virtualDisplay != null) {
             virtualDisplay.release();
+            virtualDisplay = null;
         }
 
         if (imageReader != null) {
             imageReader.close();
+            imageReader = null;
         }
 
         if (mediaProjection != null) {
             mediaProjection.stop();
+            mediaProjection = null;
         }
 
         try {
