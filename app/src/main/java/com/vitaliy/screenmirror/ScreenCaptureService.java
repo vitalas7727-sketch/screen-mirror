@@ -209,7 +209,8 @@ latestFrame = output.toByteArray();frameCount++;
                         
 android.util.Log.d("ScreenMirror", "КАДР: " + latestFrame.length);
 
-                    } catch (Exception ignored) {
+                    } catch (Exception e) {
+    android.util.Log.e("ScreenMirror", "ОШИБКА КАДРА", e);
 
                     } finally {
 
