@@ -127,20 +127,6 @@ public class ScreenCaptureService extends Service {
         null
 );
 
-        mediaProjection.registerCallback(
-        new MediaProjection.Callback() {
-            @Override
-            public void onStop() {
-                running = false;
-
-                if (virtualDisplay != null) {
-                    virtualDisplay.release();
-                    virtualDisplay = null;
-                }
-            }
-        },
-        null
-);
 
         DisplayMetrics metrics =
                 getResources().getDisplayMetrics();
