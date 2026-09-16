@@ -37,11 +37,22 @@ jobs:
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Собрать APK
-        run: gradle assembleDebug
+      - name: Подготовить ключ подписи
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/release-keystore.jks
+
+      - name: Собрать подписанный APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          gradle assembleRelease \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/app/release-keystore.jks" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="screenmirror" \
+            -Pandroid.injected.signing.key.password="$KEYSTORE_PASSWORD"
 
       - name: Сохранить APK
         uses: actions/upload-artifact@v4
         with:
-          name: ScreenMirror-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: ScreenMirror-release
+          path: app/build/outputs/apk/release/app-release.apk
