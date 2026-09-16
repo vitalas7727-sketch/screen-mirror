@@ -79,6 +79,7 @@ public class MainActivity extends Activity {
         if (requestCode == REQUEST_CAPTURE
                 && resultCode == RESULT_OK
                 && data != null) {
+            statusText.setText("OK: RESULT + DATA");
 
             Intent serviceIntent =
                     new Intent(
