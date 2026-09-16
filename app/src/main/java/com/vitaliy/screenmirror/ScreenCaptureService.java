@@ -38,6 +38,7 @@ public class ScreenCaptureService extends Service {
     private ServerSocket serverSocket;
 
     private volatile byte[] latestFrame;
+    private volatile String lastError = "";
     private volatile boolean running = true;
 
     @Override
@@ -217,10 +218,17 @@ public class ScreenCaptureService extends Service {
 
                     } catch (Exception e) {
 
-                        android.util.Log.e(
-                                "ScreenMirror",
-                                "ОШИБКА КАДРА",
-                                e);
+    lastError =
+            e.getClass().getSimpleName()
+            + ": "
+            + e.getMessage();
+
+    android.util.Log.e(
+            "ScreenMirror",
+            "ОШИБКА КАДРА",
+            e);
+
+                            }
 
                     } finally {
 
@@ -398,8 +406,13 @@ public class ScreenCaptureService extends Service {
 
         if (frame == null) {
 
-            String message =
-                    "WAITING_FOR_FRAME";
+            String message;
+
+if (latestFrame == null) {
+    message = "WAITING_FOR_FRAME\nERROR: " + lastError;
+} else {
+    message = "FRAME OK: " + latestFrame.length;
+}
 
             String header =
                     "HTTP/1.1 503 Service Unavailable\r\n" +
