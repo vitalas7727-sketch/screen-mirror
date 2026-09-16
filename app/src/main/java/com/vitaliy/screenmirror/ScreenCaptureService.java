@@ -99,6 +99,7 @@ public class ScreenCaptureService extends Service {
     private void startProjection(
             int resultCode,
             Intent data) {
+                lastError = "PROJECTION_STARTED";
 
         MediaProjectionManager manager =
                 (MediaProjectionManager)
