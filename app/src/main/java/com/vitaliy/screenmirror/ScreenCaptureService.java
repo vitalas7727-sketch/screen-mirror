@@ -398,59 +398,56 @@ public class ScreenCaptureService extends Service {
     }
 
     private void sendFrame(
-            OutputStream output)
-            throws Exception {
+        OutputStream output)
+        throws Exception {
 
-        byte[] frame =
-                latestFrame;
+    byte[] frame = latestFrame;
 
-        if (frame == null) {
+    if (frame == null) {
 
-            String message;
+        String message =
+                "WAITING_FOR_FRAME\nERROR: "
+                + lastError;
 
-if (latestFrame == null) {
-    message = "WAITING_FOR_FRAME\nERROR: " + lastError;
-} else {
-    message = "FRAME OK: " + latestFrame.length;
-}
-
-            String header =
-                    "HTTP/1.1 503 Service Unavailable\r\n" +
-                    "Content-Type: text/plain; charset=UTF-8\r\n" +
-                    "Content-Length: " +
-                    message.getBytes("UTF-8").length +
-                    "\r\n" +
-                    "Connection: close\r\n" +
-                    "\r\n";
-
-            output.write(
-                    header.getBytes("UTF-8"));
-
-            output.write(
-                    message.getBytes("UTF-8"));
-
-            output.flush();
-
-            return;
-        }
+        byte[] messageBytes =
+                message.getBytes("UTF-8");
 
         String header =
-                "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: image/jpeg\r\n" +
+                "HTTP/1.1 503 Service Unavailable\r\n" +
+                "Content-Type: text/plain; charset=UTF-8\r\n" +
                 "Content-Length: " +
-                frame.length +
+                messageBytes.length +
                 "\r\n" +
-                "Cache-Control: no-cache\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
 
         output.write(
                 header.getBytes("UTF-8"));
 
-        output.write(frame);
+        output.write(messageBytes);
 
         output.flush();
+
+        return;
     }
+
+    String header =
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: image/jpeg\r\n" +
+            "Content-Length: " +
+            frame.length +
+            "\r\n" +
+            "Cache-Control: no-cache\r\n" +
+            "Connection: close\r\n" +
+            "\r\n";
+
+    output.write(
+            header.getBytes("UTF-8"));
+
+    output.write(frame);
+
+    output.flush();
+            }
 
     private void createNotificationChannel() {
 
