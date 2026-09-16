@@ -228,7 +228,7 @@ public class ScreenCaptureService extends Service {
             "ОШИБКА КАДРА",
             e);
 
-                            }
+                            
 
                     } finally {
 
@@ -503,7 +503,7 @@ public class ScreenCaptureService extends Service {
     }
 
     @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
-            }
+public IBinder onBind(Intent intent) {
+    return null;
+}
+}       
