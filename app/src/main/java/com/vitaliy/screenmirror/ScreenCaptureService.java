@@ -203,8 +203,12 @@ public class ScreenCaptureService extends Service {
                             output.toByteArray();
 
                     lastError =
-                            "FRAME_OK " +
-                            latestFrame.length;
+        "FRAME_OK " +
+        latestFrame.length +
+        " SIZE=" +
+        width +
+        "x" +
+        height;
 
                     android.util.Log.d(
                             "ScreenMirror",
