@@ -96,168 +96,177 @@ public class ScreenCaptureService extends Service {
         return START_NOT_STICKY;
     }
 
-    private void startProjection(
-            int resultCode,
-            Intent data) {
-                lastError = "PROJECTION_STARTED";
+  private void startProjection(
+        int resultCode,
+        Intent data) {
 
-        MediaProjectionManager manager =
-                (MediaProjectionManager)
-                        getSystemService(
-                                MEDIA_PROJECTION_SERVICE);
+    lastError = "PROJECTION_STARTED";
 
-        mediaProjection =
-                manager.getMediaProjection(
-                        resultCode,
-                        data);
+    MediaProjectionManager manager =
+            (MediaProjectionManager)
+                    getSystemService(
+                            MEDIA_PROJECTION_SERVICE);
 
-        if (mediaProjection == null) {
-            return;
-        }
+    mediaProjection =
+            manager.getMediaProjection(
+                    resultCode,
+                    data);
 
-        mediaProjection.registerCallback(
-                new MediaProjection.Callback() {
-                    @Override
-                    public void onStop() {
-                        running = false;
-
-                        if (virtualDisplay != null) {
-                            virtualDisplay.release();
-                            virtualDisplay = null;
-                        }
-                    }
-                },
-                null
-        );
-
-        DisplayMetrics metrics =
-                getResources().getDisplayMetrics();
-
-        int width = metrics.widthPixels;
-        int height = metrics.heightPixels;
-        int density = metrics.densityDpi;
-
-        imageReader =
-                ImageReader.newInstance(
-                        width,
-                        height,
-                        PixelFormat.RGBA_8888,
-                        2);
-
-        imageReader.setOnImageAvailableListener(
-                reader -> {
-
-                    Image image = null;
-
-                    try {
-
-                        image =
-                                reader.acquireLatestImage();
-
-                        if (image == null) {
-                            return;
-                        }
-
-                        Image.Plane plane =
-                                image.getPlanes()[0];
-
-                        ByteBuffer buffer =
-                                plane.getBuffer();
-
-                        int pixelStride =
-                                plane.getPixelStride();
-
-                        int rowStride =
-                                plane.getRowStride();
-
-                        int rowPadding =
-                                rowStride -
-                                pixelStride * width;
-
-                        int bitmapWidth =
-                                width +
-                                rowPadding / pixelStride;
-
-                        Bitmap bitmap =
-                                Bitmap.createBitmap(
-                                        bitmapWidth,
-                                        height,
-                                        Bitmap.Config.ARGB_8888);
-
-                        buffer.rewind();
-
-                        bitmap.copyPixelsFromBuffer(
-                                buffer);
-
-                        Bitmap cropped =
-                                Bitmap.createBitmap(
-                                        bitmap,
-                                        0,
-                                        0,
-                                        width,
-                                        height);
-
-                        bitmap.recycle();
-
-                        ByteArrayOutputStream output =
-                                new ByteArrayOutputStream();
-
-                        cropped.compress(
-                                Bitmap.CompressFormat.JPEG,
-                                60,
-                                output);
-
-                        cropped.recycle();
-
-                        latestFrame =
-                                output.toByteArray();
-
-                        android.util.Log.d(
-                                "ScreenMirror",
-                                "КАДР: " +
-                                latestFrame.length);
-
-                    } catch (Exception e) {
-
-    lastError =
-            e.getClass().getSimpleName()
-            + ": "
-            + e.getMessage();
-
-    android.util.Log.e(
-            "ScreenMirror",
-            "ОШИБКА КАДРА",
-            e);
-
-                            
-
-                    } finally {
-
-                        if (image != null) {
-                            image.close();
-                        }
-                    }
-
-                },
-                null);
-
-        virtualDisplay =
-                mediaProjection.createVirtualDisplay(
-                        "ScreenMirror",
-                        width,
-                        height,
-                        density,
-                        DisplayManager
-                                .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                        imageReader.getSurface(),
-                        null,
-                        null);
-                if (virtualDisplay == null) {
-            lastError = "VIRTUAL_DISPLAY_NULL";
-        } else {
-            lastError = "VIRTUAL_DISPLAY_CREATED";
-                }
+    if (mediaProjection == null) {
+        lastError = "MEDIA_PROJECTION_NULL";
+        return;
     }
+
+    lastError = "MEDIA_PROJECTION_OK";
+
+    DisplayMetrics metrics =
+            getResources().getDisplayMetrics();
+
+    int width = metrics.widthPixels;
+    int height = metrics.heightPixels;
+    int density = metrics.densityDpi;
+
+    imageReader =
+            ImageReader.newInstance(
+                    width,
+                    height,
+                    PixelFormat.RGBA_8888,
+                    2);
+
+    imageReader.setOnImageAvailableListener(
+            reader -> {
+
+                Image image = null;
+
+                try {
+
+                    image =
+                            reader.acquireLatestImage();
+
+                    if (image == null) {
+                        lastError = "IMAGE_NULL";
+                        return;
+                    }
+
+                    Image.Plane plane =
+                            image.getPlanes()[0];
+
+                    ByteBuffer buffer =
+                            plane.getBuffer();
+
+                    int pixelStride =
+                            plane.getPixelStride();
+
+                    int rowStride =
+                            plane.getRowStride();
+
+                    int rowPadding =
+                            rowStride -
+                            pixelStride * width;
+
+                    int bitmapWidth =
+                            width +
+                            rowPadding / pixelStride;
+
+                    Bitmap bitmap =
+                            Bitmap.createBitmap(
+                                    bitmapWidth,
+                                    height,
+                                    Bitmap.Config.ARGB_8888);
+
+                    buffer.rewind();
+
+                    bitmap.copyPixelsFromBuffer(
+                            buffer);
+
+                    Bitmap cropped =
+                            Bitmap.createBitmap(
+                                    bitmap,
+                                    0,
+                                    0,
+                                    width,
+                                    height);
+
+                    bitmap.recycle();
+
+                    ByteArrayOutputStream output =
+                            new ByteArrayOutputStream();
+
+                    cropped.compress(
+                            Bitmap.CompressFormat.JPEG,
+                            60,
+                            output);
+
+                    cropped.recycle();
+
+                    latestFrame =
+                            output.toByteArray();
+
+                    lastError =
+                            "FRAME_OK " +
+                            latestFrame.length;
+
+                    android.util.Log.d(
+                            "ScreenMirror",
+                            "КАДР: " +
+                            latestFrame.length);
+
+                } catch (Exception e) {
+
+                    lastError =
+                            e.getClass().getSimpleName()
+                            + ": "
+                            + e.getMessage();
+
+                    android.util.Log.e(
+                            "ScreenMirror",
+                            "ОШИБКА КАДРА",
+                            e);
+
+                } finally {
+
+                    if (image != null) {
+                        image.close();
+                    }
+                }
+
+            },
+            null);
+
+    virtualDisplay =
+            mediaProjection.createVirtualDisplay(
+                    "ScreenMirror",
+                    width,
+                    height,
+                    density,
+                    DisplayManager
+                            .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    imageReader.getSurface(),
+                    null,
+                    null);
+
+    if (virtualDisplay == null) {
+        lastError = "VIRTUAL_DISPLAY_NULL";
+    } else {
+        lastError = "VIRTUAL_DISPLAY_OK";
+    }
+
+    mediaProjection.registerCallback(
+            new MediaProjection.Callback() {
+
+                @Override
+                public void onStop() {
+
+                    running = false;
+
+                    if (virtualDisplay != null) {
+                        virtualDisplay.release();
+                        virtualDisplay = null;
+                    }
+                }
+            },
+            null);
+  }
 
     private void startWebServer() {
 
