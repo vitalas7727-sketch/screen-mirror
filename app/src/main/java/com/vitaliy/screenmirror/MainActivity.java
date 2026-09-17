@@ -3,6 +3,7 @@ package com.vitaliy.screenmirror;
 import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -19,85 +20,62 @@ public class MainActivity extends Activity {
     private TextView statusText;
     private TextView urlText;
 
-   @Override
-protected void onActivityResult(
-        int requestCode,
-        int resultCode,
-        Intent data) {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-    super.onActivityResult(
-            requestCode,
-            resultCode,
-            data);
+        LinearLayout layout =
+                new LinearLayout(this);
 
-    if (requestCode != REQUEST_CAPTURE) {
-        return;
-    }
+        layout.setOrientation(
+                LinearLayout.VERTICAL);
 
-    if (resultCode != RESULT_OK) {
+        layout.setPadding(
+                40,
+                60,
+                40,
+                40);
+
+        TextView title =
+                new TextView(this);
+
+        title.setText(
+                "Screen Mirror");
+
+        title.setTextSize(26);
+
+        statusText =
+                new TextView(this);
 
         statusText.setText(
-                "CAPTURE_CANCELLED");
+                "Готов к запуску");
 
-        return;
-    }
+        statusText.setTextSize(18);
 
-    if (data == null) {
-
-        statusText.setText(
-                "CAPTURE_DATA_NULL");
-
-        return;
-    }
-
-    statusText.setText(
-            "CAPTURE_DATA_OK");
-
-    Intent serviceIntent =
-            new Intent(
-                    MainActivity.this,
-                    ScreenCaptureService.class);
-
-    serviceIntent.putExtra(
-            "resultCode",
-            resultCode);
-
-    serviceIntent.putExtra(
-            "data",
-            data);
-
-    serviceIntent.putExtra(
-            "projectionData",
-            data);
-
-    if (android.os.Build.VERSION.SDK_INT >=
-            android.os.Build.VERSION_CODES.O) {
-
-        startForegroundService(
-                serviceIntent);
-
-    } else {
-
-        startService(
-                serviceIntent);
-    }
-
-    String ip =
-            getLocalIpAddress();
-
-    if (ip != null) {
+        urlText =
+                new TextView(this);
 
         urlText.setText(
-                "На телевизоре открой:\nhttp://"
-                + ip
-                + ":8080");
+                "Телевизор пока не подключён");
 
-    } else {
+        urlText.setTextSize(17);
 
-        urlText.setText(
-                "IP-адрес не найден");
+        Button startButton =
+                new Button(this);
+
+        startButton.setText(
+                "Начать трансляцию");
+
+        layout.addView(title);
+        layout.addView(statusText);
+        layout.addView(urlText);
+        layout.addView(startButton);
+
+        setContentView(layout);
+
+        startButton.setOnClickListener(
+                v -> startScreenCapture());
     }
-} 
 
     private void startScreenCapture() {
 
@@ -122,7 +100,84 @@ protected void onActivityResult(
                 REQUEST_CAPTURE);
     }
 
-    
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data) {
+
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data);
+
+        if (requestCode != REQUEST_CAPTURE) {
+            return;
+        }
+
+        if (resultCode != RESULT_OK) {
+
+            statusText.setText(
+                    "CAPTURE_CANCELLED");
+
+            return;
+        }
+
+        if (data == null) {
+
+            statusText.setText(
+                    "CAPTURE_DATA_NULL");
+
+            return;
+        }
+
+        statusText.setText(
+                "CAPTURE_DATA_OK");
+
+        Intent serviceIntent =
+                new Intent(
+                        MainActivity.this,
+                        ScreenCaptureService.class);
+
+        serviceIntent.putExtra(
+                "resultCode",
+                resultCode);
+
+        serviceIntent.putExtra(
+                "data",
+                data);
+
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O) {
+
+            startForegroundService(
+                    serviceIntent);
+
+        } else {
+
+            startService(
+                    serviceIntent);
+        }
+
+        String ip =
+                getLocalIpAddress();
+
+        if (ip != null) {
+
+            urlText.setText(
+                    "На телевизоре открой:\nhttp://"
+                    + ip
+                    + ":8080");
+
+        } else {
+
+            urlText.setText(
+                    "IP-адрес не найден");
+        }
+
+        statusText.setText(
+                "Трансляция запущена");
+    }
 
     private String getLocalIpAddress() {
 
@@ -158,4 +213,4 @@ protected void onActivityResult(
 
         return null;
     }
-            }
+    }
