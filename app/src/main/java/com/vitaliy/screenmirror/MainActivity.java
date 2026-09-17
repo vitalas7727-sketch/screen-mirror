@@ -23,24 +23,47 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(40, 60, 40, 40);
+        LinearLayout layout =
+                new LinearLayout(this);
 
-        TextView title = new TextView(this);
-        title.setText("Screen Mirror");
+        layout.setOrientation(
+                LinearLayout.VERTICAL);
+
+        layout.setPadding(
+                40,
+                60,
+                40,
+                40);
+
+        TextView title =
+                new TextView(this);
+
+        title.setText(
+                "Screen Mirror");
+
         title.setTextSize(26);
 
-        statusText = new TextView(this);
-        statusText.setText("Готов к запуску");
+        statusText =
+                new TextView(this);
+
+        statusText.setText(
+                "Готов к запуску");
+
         statusText.setTextSize(18);
 
-        urlText = new TextView(this);
-        urlText.setText("Телевизор пока не подключён");
+        urlText =
+                new TextView(this);
+
+        urlText.setText(
+                "Телевизор пока не подключён");
+
         urlText.setTextSize(17);
 
-        Button startButton = new Button(this);
-        startButton.setText("Начать трансляцию");
+        Button startButton =
+                new Button(this);
+
+        startButton.setText(
+                "Начать трансляцию");
 
         layout.addView(title);
         layout.addView(statusText);
@@ -49,13 +72,24 @@ public class MainActivity extends Activity {
 
         setContentView(layout);
 
-        startButton.setOnClickListener(v -> startScreenCapture());
+        startButton.setOnClickListener(
+                v -> startScreenCapture());
     }
 
     private void startScreenCapture() {
+
         MediaProjectionManager manager =
                 (MediaProjectionManager)
-                        getSystemService(MEDIA_PROJECTION_SERVICE);
+                        getSystemService(
+                                MEDIA_PROJECTION_SERVICE);
+
+        if (manager == null) {
+
+            statusText.setText(
+                    "ОШИБКА: MEDIA_PROJECTION_MANAGER");
+
+            return;
+        }
 
         Intent captureIntent =
                 manager.createScreenCaptureIntent();
@@ -76,56 +110,109 @@ public class MainActivity extends Activity {
                 resultCode,
                 data);
 
-        if (requestCode == REQUEST_CAPTURE
-                && resultCode == RESULT_OK
-                && data != null) {
-            statusText.setText("OK: RESULT + DATA");
-            
+        if (requestCode != REQUEST_CAPTURE) {
+            return;
+        }
 
-            Intent serviceIntent =
-                    new Intent(
-                            this,
-                            ScreenCaptureService.class);
+        if (resultCode != RESULT_OK) {
 
-            serviceIntent.putExtra("resultCode", resultCode);
-            serviceIntent.putExtra("data", data);
+            statusText.setText(
+                    "Трансляция отменена");
 
-            startForegroundService(serviceIntent);
+            return;
+        }
 
-            statusText.setText("Трансляция запущена");
+        if (data == null) {
 
-            String ip = getLocalIpAddress();
+            statusText.setText(
+                    "ОШИБКА: DATA = NULL");
 
-            if (ip != null) {
-                urlText.setText(
-                        "На телевизоре открой:\nhttp://"
-                                + ip
-                                + ":8080");
-            }
+            return;
+        }
+
+        statusText.setText(
+                "OK: RESULT + DATA");
+
+        Intent serviceIntent =
+                new Intent(
+                        this,
+                        ScreenCaptureService.class);
+
+        serviceIntent.setAction(
+                "START_SCREEN_CAPTURE");
+
+        serviceIntent.putExtra(
+                "resultCode",
+                resultCode);
+
+        serviceIntent.putExtra(
+                "data",
+                data);
+
+        if (android.os.Build.VERSION.SDK_INT >=
+                android.os.Build.VERSION_CODES.O) {
+
+            startForegroundService(
+                    serviceIntent);
+
         } else {
-            statusText.setText("Трансляция отменена");
+
+            startService(
+                    serviceIntent);
+        }
+
+        statusText.setText(
+                "Трансляция запущена");
+
+        String ip =
+                getLocalIpAddress();
+
+        if (ip != null) {
+
+            urlText.setText(
+                    "На телевизоре открой:\nhttp://"
+                    + ip
+                    + ":8080");
+
+        } else {
+
+            urlText.setText(
+                    "IP-адрес не найден");
         }
     }
 
     private String getLocalIpAddress() {
+
         try {
+
             for (NetworkInterface networkInterface :
                     Collections.list(
-                            NetworkInterface.getNetworkInterfaces())) {
+                            NetworkInterface
+                                    .getNetworkInterfaces())) {
 
                 for (java.net.InetAddress address :
                         Collections.list(
-                                networkInterface.getInetAddresses())) {
+                                networkInterface
+                                        .getInetAddresses())) {
 
-                    if (!address.isLoopbackAddress()
-                            && address instanceof Inet4Address) {
-                        return address.getHostAddress();
+                    if (!address
+                            .isLoopbackAddress()
+                            && address
+                            instanceof Inet4Address) {
+
+                        return address
+                                .getHostAddress();
                     }
                 }
             }
-        } catch (Exception ignored) {
+
+        } catch (Exception e) {
+
+            statusText.setText(
+                    "IP ERROR: "
+                    + e.getMessage());
         }
 
         return null;
     }
-          }
+            }
