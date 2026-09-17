@@ -136,8 +136,8 @@ lastError =
                             "data");
         }
 
-        if (resultCode == -1 ||
-                data == null) {
+        if (resultCode != RESULT_OK ||
+        data == null) {
 
             lastError =
                     "NO_PROJECTION_DATA";
