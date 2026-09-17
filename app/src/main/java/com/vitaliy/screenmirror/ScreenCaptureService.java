@@ -15,6 +15,8 @@ import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 
@@ -29,7 +31,9 @@ import java.nio.ByteBuffer;
 
 public class ScreenCaptureService extends Service {
 
-    private static final String CHANNEL_ID = "ScreenMirrorChannel";
+    private static final String CHANNEL_ID =
+            "ScreenMirrorChannel";
+
     private static final int PORT = 8080;
 
     private MediaProjection mediaProjection;
@@ -37,446 +41,509 @@ public class ScreenCaptureService extends Service {
     private ImageReader imageReader;
     private ServerSocket serverSocket;
 
+    private HandlerThread imageThread;
+    private Handler imageHandler;
+
     private volatile byte[] latestFrame;
-    private volatile String lastError = "";
+    private volatile String lastError =
+            "WAITING_FOR_PROJECTION";
+
     private volatile boolean running = true;
+    private volatile boolean serverStarted = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
+        running = true;
+
         createNotificationChannel();
 
         Notification notification =
-                new Notification.Builder(this, CHANNEL_ID)
-                        .setContentTitle("Screen Mirror")
-                        .setContentText("Трансляция экрана запущена")
-                        .setSmallIcon(android.R.drawable.ic_menu_view)
+                new Notification.Builder(
+                        this,
+                        CHANNEL_ID)
+                        .setContentTitle(
+                                "Screen Mirror")
+                        .setContentText(
+                                "Трансляция экрана запущена")
+                        .setSmallIcon(
+                                android.R.drawable.ic_menu_view)
                         .build();
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.Q) {
+
             startForeground(
                     1,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                    ServiceInfo
+                            .FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             );
+
         } else {
-            startForeground(1, notification);
+
+            startForeground(
+                    1,
+                    notification);
         }
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-
-        startWebServer();
+    public int onStartCommand(
+            Intent intent,
+            int flags,
+            int startId) {
 
         if (intent == null) {
             stopSelf();
             return START_NOT_STICKY;
         }
 
+        running = true;
+
+        startWebServer();
+
         int resultCode =
-                intent.getIntExtra("resultCode", -1);
+                intent.getIntExtra(
+                        "resultCode",
+                        -1);
 
         Intent data;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            data = intent.getParcelableExtra(
-                    "data",
-                    Intent.class
-            );
+        if (Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.TIRAMISU) {
+
+            data =
+                    intent.getParcelableExtra(
+                            "data",
+                            Intent.class);
+
         } else {
-            data = intent.getParcelableExtra("data");
+
+            data =
+                    intent.getParcelableExtra(
+                            "data");
         }
 
-        if (resultCode != -1 && data != null) {
-            startProjection(resultCode, data);
+        if (resultCode == -1 ||
+                data == null) {
+
+            lastError =
+                    "NO_PROJECTION_DATA";
+
+            return START_NOT_STICKY;
         }
+
+        startProjection(
+                resultCode,
+                data);
 
         return START_NOT_STICKY;
     }
 
-   private void startProjection(
-        int resultCode,
-        Intent data) {
+    private void startProjection(
+            int resultCode,
+            Intent data) {
 
-    lastError = "PROJECTION_STARTED";
+        releaseProjectionResources();
 
-    MediaProjectionManager manager =
-            (MediaProjectionManager)
-                    getSystemService(
-                            MEDIA_PROJECTION_SERVICE);
-
-    mediaProjection =
-            manager.getMediaProjection(
-                    resultCode,
-                    data);
-
-    if (mediaProjection == null) {
-        lastError = "MEDIA_PROJECTION_NULL";
-        return;
-    }
-
-    lastError = "MEDIA_PROJECTION_OK";
-
-    DisplayMetrics metrics =
-            getResources().getDisplayMetrics();
-
-    int width = metrics.widthPixels;
-    int height = metrics.heightPixels;
-    int density = metrics.densityDpi;
-
-    imageReader =
-            ImageReader.newInstance(
-                    width,
-                    height,
-                    PixelFormat.RGBA_8888,
-                    2);
-
-    imageReader.setOnImageAvailableListener(
-        reader -> {
-
-            Image image = null;
-
-            try {
-                image = reader.acquireLatestImage();
-
-                if (image == null) {
-                    return;
-                }
-
-                Image.Plane plane = image.getPlanes()[0];
-
-                ByteBuffer buffer = plane.getBuffer();
-
-                int pixelStride = plane.getPixelStride();
-                int rowStride = plane.getRowStride();
-
-                int rowPadding =
-                        rowStride - pixelStride * width;
-
-                int bitmapWidth =
-                        width + rowPadding / pixelStride;
-
-                Bitmap bitmap =
-                        Bitmap.createBitmap(
-                                bitmapWidth,
-                                height,
-                                Bitmap.Config.ARGB_8888);
-
-                buffer.rewind();
-
-                bitmap.copyPixelsFromBuffer(buffer);
-
-                Bitmap cropped =
-                        Bitmap.createBitmap(
-                                bitmap,
-                                0,
-                                0,
-                                width,
-                                height);
-
-                bitmap.recycle();
-
-                ByteArrayOutputStream output =
-                        new ByteArrayOutputStream();
-
-                cropped.compress(
-                        Bitmap.CompressFormat.JPEG,
-                        80,
-                        output);
-
-                cropped.recycle();
-
-                byte[] frame =
-                        output.toByteArray();
-
-                if (frame.length > 0) {
-                    latestFrame = frame;
-
-                    lastError =
-                            "FRAME_OK " +
-                            frame.length +
-                            " SIZE=" +
-                            width +
-                            "x" +
-                            height;
-                }
-
-private void startProjection(
-        int resultCode,
-        Intent data) {
-
-    lastError = "PROJECTION_STARTED";
-
-    MediaProjectionManager manager =
-            (MediaProjectionManager)
-                    getSystemService(
-                            MEDIA_PROJECTION_SERVICE);
-
-    mediaProjection =
-            manager.getMediaProjection(
-                    resultCode,
-                    data);
-
-    if (mediaProjection == null) {
-        lastError = "MEDIA_PROJECTION_NULL";
-        return;
-    }
-
-    lastError = "MEDIA_PROJECTION_OK";
-
-    DisplayMetrics metrics =
-            new DisplayMetrics();
-
-    DisplayManager displayManager =
-            (DisplayManager)
-                    getSystemService(
-                            DISPLAY_SERVICE);
-
-    android.view.Display display =
-            displayManager.getDisplay(
-                    android.view.Display.DEFAULT_DISPLAY);
-
-    if (display == null) {
-        lastError = "DISPLAY_NULL";
-        return;
-    }
-
-    display.getRealMetrics(metrics);
-
-    int width = metrics.widthPixels;
-    int height = metrics.heightPixels;
-    int density = metrics.densityDpi;
-
-    lastError =
-            "DISPLAY_SIZE " +
-            width +
-            "x" +
-            height;
-
-    imageReader =
-            ImageReader.newInstance(
-                    width,
-                    height,
-                    PixelFormat.RGBA_8888,
-                    3);
-
-    imageReader.setOnImageAvailableListener(
-            reader -> {
-
-                Image image = null;
-
-                try {
-
-                    image =
-                            reader.acquireLatestImage();
-
-                    if (image == null) {
-                        return;
-                    }
-
-                    Image.Plane plane =
-                            image.getPlanes()[0];
-
-                    ByteBuffer buffer =
-                            plane.getBuffer();
-
-                    int pixelStride =
-                            plane.getPixelStride();
-
-                    int rowStride =
-                            plane.getRowStride();
-
-                    int rowBytes =
-                            width * pixelStride;
-
-                    byte[] pixels =
-                            new byte[rowBytes * height];
-
-                    for (int y = 0; y < height; y++) {
-
-                        int sourcePosition =
-                                y * rowStride;
-
-                        int destinationPosition =
-                                y * rowBytes;
-
-                        buffer.position(
-                                sourcePosition);
-
-                        buffer.get(
-                                pixels,
-                                destinationPosition,
-                                rowBytes);
-                    }
-
-                    Bitmap bitmap =
-                            Bitmap.createBitmap(
-                                    width,
-                                    height,
-                                    Bitmap.Config.ARGB_8888);
-
-                    ByteBuffer pixelBuffer =
-                            ByteBuffer.wrap(pixels);
-
-                    bitmap.copyPixelsFromBuffer(
-                            pixelBuffer);
-
-                    ByteArrayOutputStream output =
-                            new ByteArrayOutputStream();
-
-                    boolean compressed =
-                            bitmap.compress(
-                                    Bitmap.CompressFormat.JPEG,
-                                    80,
-                                    output);
-
-                    bitmap.recycle();
-
-                    if (!compressed) {
-                        lastError =
-                                "JPEG_COMPRESS_FAILED";
-                        return;
-                    }
-
-                    byte[] frame =
-                            output.toByteArray();
-
-                    if (frame.length > 0) {
-
-                        latestFrame =
-                                frame;
-
-                        lastError =
-                                "FRAME_OK " +
-                                frame.length +
-                                " SIZE=" +
-                                width +
-                                "x" +
-                                height;
-                    }
-
-                } catch (Exception e) {
-
-                    lastError =
-                            e.getClass()
-                                    .getSimpleName()
-                            + ": "
-                            + e.getMessage();
-
-                    android.util.Log.e(
-                            "ScreenMirror",
-                            "ОШИБКА КАДРА",
-                            e);
-
-                } finally {
-
-                    if (image != null) {
-                        image.close();
-                    }
-                }
-
-            },
-            null);
-
-    mediaProjection.registerCallback(
-            new MediaProjection.Callback() {
-
-                @Override
-                public void onStop() {
-
-                    running = false;
-
-                    if (virtualDisplay != null) {
-                        virtualDisplay.release();
-                        virtualDisplay = null;
-                    }
-
-                    if (imageReader != null) {
-                        imageReader.close();
-                        imageReader = null;
-                    }
-
-                    lastError =
-                            "MEDIA_PROJECTION_STOPPED";
-                }
-            },
-            null);
-
-    try {
-
-        virtualDisplay =
-                mediaProjection.createVirtualDisplay(
-                        "ScreenMirror",
-                        width,
-                        height,
-                        density,
-                        DisplayManager
-                                .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                        imageReader.getSurface(),
-                        null,
-                        null);
-
-        if (virtualDisplay == null) {
-
-            lastError =
-                    "VIRTUAL_DISPLAY_NULL";
-
-        } else {
-
-            lastError =
-                    "VIRTUAL_DISPLAY_OK " +
-                    width +
-                    "x" +
-                    height;
-        }
-
-    } catch (Exception e) {
+        latestFrame = null;
 
         lastError =
-                e.getClass()
-                        .getSimpleName()
-                + ": "
-                + e.getMessage();
+                "PROJECTION_STARTED";
 
-        android.util.Log.e(
-                "ScreenMirror",
-                "ОШИБКА VIRTUAL DISPLAY",
-                e);
+        try {
+
+            MediaProjectionManager manager =
+                    (MediaProjectionManager)
+                            getSystemService(
+                                    MEDIA_PROJECTION_SERVICE);
+
+            if (manager == null) {
+
+                lastError =
+                        "MEDIA_PROJECTION_MANAGER_NULL";
+
+                return;
+            }
+
+            mediaProjection =
+                    manager.getMediaProjection(
+                            resultCode,
+                            data);
+
+            if (mediaProjection == null) {
+
+                lastError =
+                        "MEDIA_PROJECTION_NULL";
+
+                return;
+            }
+
+            lastError =
+                    "MEDIA_PROJECTION_OK";
+
+            DisplayManager displayManager =
+                    (DisplayManager)
+                            getSystemService(
+                                    DISPLAY_SERVICE);
+
+            if (displayManager == null) {
+
+                lastError =
+                        "DISPLAY_MANAGER_NULL";
+
+                return;
+            }
+
+            android.view.Display display =
+                    displayManager.getDisplay(
+                            android.view.Display
+                                    .DEFAULT_DISPLAY);
+
+            if (display == null) {
+
+                lastError =
+                        "DISPLAY_NULL";
+
+                return;
+            }
+
+            DisplayMetrics metrics =
+                    new DisplayMetrics();
+
+            display.getRealMetrics(metrics);
+
+            int width =
+                    metrics.widthPixels;
+
+            int height =
+                    metrics.heightPixels;
+
+            int density =
+                    metrics.densityDpi;
+
+            if (width <= 0 ||
+                    height <= 0) {
+
+                lastError =
+                        "INVALID_DISPLAY_SIZE "
+                        + width
+                        + "x"
+                        + height;
+
+                return;
+            }
+
+            lastError =
+                    "DISPLAY_SIZE "
+                    + width
+                    + "x"
+                    + height;
+
+            imageReader =
+                    ImageReader.newInstance(
+                            width,
+                            height,
+                            PixelFormat.RGBA_8888,
+                            3);
+
+            imageThread =
+                    new HandlerThread(
+                            "ScreenMirrorCapture");
+
+            imageThread.start();
+
+            imageHandler =
+                    new Handler(
+                            imageThread.getLooper());
+
+            imageReader
+                    .setOnImageAvailableListener(
+                            reader -> {
+
+                                Image image =
+                                        null;
+
+                                try {
+
+                                    image =
+                                            reader
+                                                    .acquireLatestImage();
+
+                                    if (image == null) {
+                                        return;
+                                    }
+
+                                    Image.Plane plane =
+                                            image
+                                                    .getPlanes()[0];
+
+                                    ByteBuffer source =
+                                            plane
+                                                    .getBuffer()
+                                                    .duplicate();
+
+                                    int imageWidth =
+                                            image.getWidth();
+
+                                    int imageHeight =
+                                            image.getHeight();
+
+                                    int pixelStride =
+                                            plane
+                                                    .getPixelStride();
+
+                                    int rowStride =
+                                            plane
+                                                    .getRowStride();
+
+                                    if (pixelStride <= 0 ||
+                                            rowStride <= 0) {
+
+                                        lastError =
+                                                "INVALID_STRIDE "
+                                                + pixelStride
+                                                + "/"
+                                                + rowStride;
+
+                                        return;
+                                    }
+
+                                    if (pixelStride != 4) {
+
+                                        lastError =
+                                                "UNEXPECTED_PIXEL_STRIDE "
+                                                + pixelStride;
+
+                                        return;
+                                    }
+
+                                    int rowBytes =
+                                            imageWidth *
+                                            pixelStride;
+
+                                    long requiredBytes =
+                                            (long)
+                                                    (imageHeight - 1)
+                                            * rowStride
+                                            + rowBytes;
+
+                                    if (requiredBytes >
+                                            source.remaining()) {
+
+                                        lastError =
+                                                "BUFFER_TOO_SMALL "
+                                                + source.remaining()
+                                                + "/"
+                                                + requiredBytes;
+
+                                        return;
+                                    }
+
+                                    byte[] pixels =
+                                            new byte[
+                                                    rowBytes *
+                                                    imageHeight];
+
+                                    for (int y = 0;
+                                         y < imageHeight;
+                                         y++) {
+
+                                        int sourcePosition =
+                                                y *
+                                                rowStride;
+
+                                        int targetPosition =
+                                                y *
+                                                rowBytes;
+
+                                        source.position(
+                                                sourcePosition);
+
+                                        source.get(
+                                                pixels,
+                                                targetPosition,
+                                                rowBytes);
+                                    }
+
+                                    Bitmap bitmap =
+                                            Bitmap.createBitmap(
+                                                    imageWidth,
+                                                    imageHeight,
+                                                    Bitmap.Config
+                                                            .ARGB_8888);
+
+                                    ByteBuffer packedBuffer =
+                                            ByteBuffer.wrap(
+                                                    pixels);
+
+                                    bitmap.copyPixelsFromBuffer(
+                                            packedBuffer);
+
+                                    ByteArrayOutputStream output =
+                                            new ByteArrayOutputStream();
+
+                                    boolean compressed =
+                                            bitmap.compress(
+                                                    Bitmap
+                                                            .CompressFormat
+                                                            .JPEG,
+                                                    80,
+                                                    output);
+
+                                    bitmap.recycle();
+
+                                    if (!compressed) {
+
+                                        lastError =
+                                                "JPEG_COMPRESS_FAILED";
+
+                                        return;
+                                    }
+
+                                    byte[] frame =
+                                            output.toByteArray();
+
+                                    if (frame.length > 0) {
+
+                                        latestFrame =
+                                                frame;
+
+                                        lastError =
+                                                "FRAME_OK "
+                                                + frame.length
+                                                + " SIZE="
+                                                + imageWidth
+                                                + "x"
+                                                + imageHeight;
+                                    }
+
+                                } catch (Exception e) {
+
+                                    lastError =
+                                            e.getClass()
+                                                    .getSimpleName()
+                                            + ": "
+                                            + e.getMessage();
+
+                                    android.util.Log.e(
+                                            "ScreenMirror",
+                                            "ОШИБКА КАДРА",
+                                            e);
+
+                                } finally {
+
+                                    if (image != null) {
+                                        image.close();
+                                    }
+                                }
+
+                            },
+                            imageHandler);
+
+            mediaProjection.registerCallback(
+                    new MediaProjection.Callback() {
+
+                        @Override
+                        public void onStop() {
+
+                            lastError =
+                                    "MEDIA_PROJECTION_STOPPED";
+
+                            releaseProjectionResources();
+                        }
+                    },
+                    null);
+
+            virtualDisplay =
+                    mediaProjection
+                            .createVirtualDisplay(
+                                    "ScreenMirror",
+                                    width,
+                                    height,
+                                    density,
+                                    DisplayManager
+                                            .VIRTUAL_DISPLAY_FLAG
+                                            .AUTO_MIRROR,
+                                    imageReader
+                                            .getSurface(),
+                                    null,
+                                    null);
+
+            if (virtualDisplay == null) {
+
+                lastError =
+                        "VIRTUAL_DISPLAY_NULL";
+
+                return;
+            }
+
+            lastError =
+                    "VIRTUAL_DISPLAY_OK "
+                    + width
+                    + "x"
+                    + height;
+
+        } catch (Exception e) {
+
+            lastError =
+                    e.getClass()
+                            .getSimpleName()
+                    + ": "
+                    + e.getMessage();
+
+            android.util.Log.e(
+                    "ScreenMirror",
+                    "ОШИБКА PROJECTION",
+                    e);
+        }
     }
-                }
-
-               
 
     private void startWebServer() {
 
-        new Thread(() -> {
+        if (serverStarted) {
+            return;
+        }
 
-            try {
+        serverStarted = true;
 
-                serverSocket =
-                        new ServerSocket(PORT);
+        new Thread(
+                () -> {
 
-                while (running) {
+                    try {
 
-                    Socket socket =
-                            serverSocket.accept();
+                        serverSocket =
+                                new ServerSocket(
+                                        PORT);
 
-                    new Thread(() ->
-                            handleClient(socket)
-                    ).start();
-                }
+                        while (running) {
 
-            } catch (Exception e) {
+                            Socket socket =
+                                    serverSocket.accept();
 
-                android.util.Log.e(
-                        "ScreenMirror",
-                        "ОШИБКА СЕРВЕРА",
-                        e);
-            }
+                            new Thread(
+                                    () -> handleClient(
+                                            socket),
+                                    "ScreenMirrorClient"
+                            ).start();
+                        }
 
-        }).start();
+                    } catch (Exception e) {
+
+                        if (running) {
+
+                            android.util.Log.e(
+                                    "ScreenMirror",
+                                    "ОШИБКА СЕРВЕРА",
+                                    e);
+                        }
+                    }
+
+                },
+                "ScreenMirrorServer"
+        ).start();
     }
 
     private void handleClient(
@@ -493,13 +560,16 @@ private void startProjection(
                     reader.readLine();
 
             if (requestLine == null) {
+
                 socket.close();
+
                 return;
             }
 
             String line;
 
-            while ((line = reader.readLine()) != null) {
+            while ((line =
+                    reader.readLine()) != null) {
 
                 if (line.isEmpty()) {
                     break;
@@ -510,9 +580,15 @@ private void startProjection(
                     new BufferedOutputStream(
                             socket.getOutputStream());
 
-            if (requestLine.contains("GET /frame.jpg")) {
+            if (requestLine.contains(
+                    "GET /frame.jpg")) {
 
                 sendFrame(output);
+
+            } else if (requestLine.contains(
+                    "GET /status")) {
+
+                sendStatus(output);
 
             } else {
 
@@ -544,41 +620,84 @@ private void startProjection(
                 "<html>" +
                 "<head>" +
                 "<meta name='viewport' " +
-                "content='width=device-width'>" +
+                "content='width=device-width," +
+                "initial-scale=1'>" +
                 "<style>" +
                 "html,body{" +
                 "margin:0;" +
                 "padding:0;" +
-                "background:black;" +
+                "background:#000;" +
                 "width:100%;" +
                 "height:100%;" +
                 "overflow:hidden;" +
                 "}" +
-                "img{" +
+                "#screen{" +
+                "display:none;" +
                 "width:100%;" +
                 "height:100%;" +
                 "object-fit:contain;" +
                 "}" +
+                "#status{" +
+                "position:fixed;" +
+                "left:0;" +
+                "top:0;" +
+                "right:0;" +
+                "padding:12px;" +
+                "box-sizing:border-box;" +
+                "color:white;" +
+                "background:rgba(0,0,0,.75);" +
+                "font-family:sans-serif;" +
+                "font-size:14px;" +
+                "z-index:10;" +
+                "}" +
                 "</style>" +
                 "</head>" +
                 "<body>" +
-                "<img src='/frame.jpg' " +
-                "id='screen'>" +
+                "<div id='status'>" +
+                "Подключение..." +
+                "</div>" +
+                "<img id='screen'>" +
                 "<script>" +
-"function loadFrame(){" +
-"var img=document.getElementById('screen');" +
-"var next=new Image();" +
-"next.onload=function(){" +
-"img.src=next.src;" +
-"setTimeout(loadFrame,100);" +
-"};" +
-"next.onerror=function(){" +
-"setTimeout(loadFrame,500);" +
-"};" +
-"next.src='/frame.jpg?t=' + Date.now();" +
-"}" +
-"loadFrame();" +
-"</script>" +
+                "function updateStatus(){" +
+                "fetch('/status?t='+" +
+                "Date.now())" +
+                ".then(function(r){" +
+                "return r.text();" +
+                "})" +
+                ".then(function(t){" +
+                "document.getElementById(" +
+                "'status').textContent=t;" +
+                "})" +
+                ".catch(function(){" +
+                "document.getElementById(" +
+                "'status').textContent=" +
+                "'SERVER_ERROR';" +
+                "});" +
+                "}" +
+                "function loadFrame(){" +
+                "var img=" +
+                "document.getElementById('screen');" +
+                "var status=" +
+                "document.getElementById('status');" +
+                "var next=new Image();" +
+                "next.onload=function(){" +
+                "img.src=next.src;" +
+                "img.style.display='block';" +
+                "status.style.display='none';" +
+                "setTimeout(loadFrame,100);" +
+                "};" +
+                "next.onerror=function(){" +
+                "updateStatus();" +
+                "setTimeout(loadFrame,500);" +
+                "};" +
+                "next.src='/frame.jpg?t='+" +
+                "Date.now();" +
+                "}" +
+                "updateStatus();" +
+                "setInterval(" +
+                "updateStatus,1000);" +
+                "loadFrame();" +
+                "</script>" +
                 "</body>" +
                 "</html>";
 
@@ -587,10 +706,12 @@ private void startProjection(
 
         String header =
                 "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: text/html; charset=UTF-8\r\n" +
+                "Content-Type: text/html; " +
+                "charset=UTF-8\r\n" +
                 "Content-Length: " +
                 bytes.length +
                 "\r\n" +
+                "Cache-Control: no-store\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
 
@@ -603,56 +724,138 @@ private void startProjection(
     }
 
     private void sendFrame(
-        OutputStream output)
-        throws Exception {
+            OutputStream output)
+            throws Exception {
 
-    byte[] frame = latestFrame;
+        byte[] frame =
+                latestFrame;
 
-    if (frame == null) {
+        if (frame == null) {
 
-        String message =
-                "WAITING_FOR_FRAME\nERROR: "
-                + lastError;
+            String message =
+                    "WAITING_FOR_FRAME\n" +
+                    "ERROR: " +
+                    lastError;
 
-        byte[] messageBytes =
-                message.getBytes("UTF-8");
+            byte[] messageBytes =
+                    message.getBytes("UTF-8");
+
+            String header =
+                    "HTTP/1.1 503 Service Unavailable\r\n" +
+                    "Content-Type: text/plain; " +
+                    "charset=UTF-8\r\n" +
+                    "Content-Length: " +
+                    messageBytes.length +
+                    "\r\n" +
+                    "Cache-Control: no-store\r\n" +
+                    "Connection: close\r\n" +
+                    "\r\n";
+
+            output.write(
+                    header.getBytes("UTF-8"));
+
+            output.write(
+                    messageBytes);
+
+            output.flush();
+
+            return;
+        }
 
         String header =
-                "HTTP/1.1 503 Service Unavailable\r\n" +
-                "Content-Type: text/plain; charset=UTF-8\r\n" +
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: image/jpeg\r\n" +
                 "Content-Length: " +
-                messageBytes.length +
+                frame.length +
                 "\r\n" +
+                "Cache-Control: no-store, no-cache, " +
+                "must-revalidate\r\n" +
+                "Pragma: no-cache\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
 
         output.write(
                 header.getBytes("UTF-8"));
 
-        output.write(messageBytes);
+        output.write(frame);
 
         output.flush();
-
-        return;
     }
 
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: image/jpeg\r\n" +
-            "Content-Length: " +
-            frame.length +
-            "\r\n" +
-            "Cache-Control: no-cache\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
+    private void sendStatus(
+            OutputStream output)
+            throws Exception {
 
-    output.write(
-            header.getBytes("UTF-8"));
+        String status =
+                lastError;
 
-    output.write(frame);
+        byte[] bytes =
+                status.getBytes("UTF-8");
 
-    output.flush();
+        String header =
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: text/plain; " +
+                "charset=UTF-8\r\n" +
+                "Content-Length: " +
+                bytes.length +
+                "\r\n" +
+                "Cache-Control: no-store\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
+
+        output.write(
+                header.getBytes("UTF-8"));
+
+        output.write(bytes);
+
+        output.flush();
+    }
+
+    private void releaseProjectionResources() {
+
+        if (virtualDisplay != null) {
+
+            try {
+                virtualDisplay.release();
+            } catch (Exception ignored) {
             }
+
+            virtualDisplay = null;
+        }
+
+        if (imageReader != null) {
+
+            try {
+                imageReader.close();
+            } catch (Exception ignored) {
+            }
+
+            imageReader = null;
+        }
+
+        if (imageThread != null) {
+
+            try {
+                imageThread.quitSafely();
+            } catch (Exception ignored) {
+            }
+
+            imageThread = null;
+            imageHandler = null;
+        }
+
+        if (mediaProjection != null) {
+
+            try {
+                mediaProjection.stop();
+            } catch (Exception ignored) {
+            }
+
+            mediaProjection = null;
+        }
+
+        latestFrame = null;
+    }
 
     private void createNotificationChannel() {
 
@@ -670,8 +873,11 @@ private void startProjection(
                     getSystemService(
                             NotificationManager.class);
 
-            manager.createNotificationChannel(
-                    channel);
+            if (manager != null) {
+
+                manager.createNotificationChannel(
+                        channel);
+            }
         }
     }
 
@@ -680,25 +886,16 @@ private void startProjection(
 
         running = false;
 
-        if (virtualDisplay != null) {
-            virtualDisplay.release();
-            virtualDisplay = null;
-        }
+        releaseProjectionResources();
 
-        if (imageReader != null) {
-            imageReader.close();
-            imageReader = null;
-        }
-
-        if (mediaProjection != null) {
-            mediaProjection.stop();
-            mediaProjection = null;
-        }
+        serverStarted = false;
 
         try {
 
             if (serverSocket != null) {
+
                 serverSocket.close();
+                serverSocket = null;
             }
 
         } catch (Exception ignored) {
@@ -708,7 +905,9 @@ private void startProjection(
     }
 
     @Override
-public IBinder onBind(Intent intent) {
-    return null;
-}
-}       
+    public IBinder onBind(
+            Intent intent) {
+
+        return null;
+    }
+    }
