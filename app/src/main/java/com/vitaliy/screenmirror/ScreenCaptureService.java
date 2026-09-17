@@ -379,9 +379,11 @@ public class ScreenCaptureService extends Service {
                 "id='screen'>" +
                 "<script>" +
                 "setInterval(function(){" +
-                "document.getElementById('screen')" +
-                ".src='/frame.jpg?t=' + Date.now();" +
-                "},500);" +
+"var img=document.getElementById('screen');" +
+"var next=new Image();" +
+"next.onload=function(){img.src=next.src;};" +
+"next.src='/frame.jpg?t=' + Date.now();" +
+"},500);" +
                 "</script>" +
                 "</body>" +
                 "</html>";
