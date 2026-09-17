@@ -96,7 +96,7 @@ public class ScreenCaptureService extends Service {
         return START_NOT_STICKY;
     }
 
-  private void startProjection(
+   private void startProjection(
         int resultCode,
         Intent data) {
 
@@ -194,7 +194,7 @@ public class ScreenCaptureService extends Service {
 
                     cropped.compress(
                             Bitmap.CompressFormat.JPEG,
-                            60,
+                            80,
                             output);
 
                     cropped.recycle();
@@ -203,17 +203,12 @@ public class ScreenCaptureService extends Service {
                             output.toByteArray();
 
                     lastError =
-        "FRAME_OK " +
-        latestFrame.length +
-        " SIZE=" +
-        width +
-        "x" +
-        height;
-
-                    android.util.Log.d(
-                            "ScreenMirror",
-                            "КАДР: " +
-                            latestFrame.length);
+                            "FRAME_OK " +
+                            latestFrame.length +
+                            " SIZE=" +
+                            width +
+                            "x" +
+                            height;
 
                 } catch (Exception e) {
 
@@ -270,7 +265,9 @@ public class ScreenCaptureService extends Service {
                 }
             },
             null);
-  }
+    }
+
+               
 
     private void startWebServer() {
 
