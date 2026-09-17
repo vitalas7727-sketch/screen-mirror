@@ -19,62 +19,85 @@ public class MainActivity extends Activity {
     private TextView statusText;
     private TextView urlText;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+   @Override
+protected void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent data) {
 
-        LinearLayout layout =
-                new LinearLayout(this);
+    super.onActivityResult(
+            requestCode,
+            resultCode,
+            data);
 
-        layout.setOrientation(
-                LinearLayout.VERTICAL);
+    if (requestCode != REQUEST_CAPTURE) {
+        return;
+    }
 
-        layout.setPadding(
-                40,
-                60,
-                40,
-                40);
-
-        TextView title =
-                new TextView(this);
-
-        title.setText(
-                "Screen Mirror");
-
-        title.setTextSize(26);
-
-        statusText =
-                new TextView(this);
+    if (resultCode != RESULT_OK) {
 
         statusText.setText(
-                "Готов к запуску");
+                "CAPTURE_CANCELLED");
 
-        statusText.setTextSize(18);
+        return;
+    }
 
-        urlText =
-                new TextView(this);
+    if (data == null) {
+
+        statusText.setText(
+                "CAPTURE_DATA_NULL");
+
+        return;
+    }
+
+    statusText.setText(
+            "CAPTURE_DATA_OK");
+
+    Intent serviceIntent =
+            new Intent(
+                    MainActivity.this,
+                    ScreenCaptureService.class);
+
+    serviceIntent.putExtra(
+            "resultCode",
+            resultCode);
+
+    serviceIntent.putExtra(
+            "data",
+            data);
+
+    serviceIntent.putExtra(
+            "projectionData",
+            data);
+
+    if (android.os.Build.VERSION.SDK_INT >=
+            android.os.Build.VERSION_CODES.O) {
+
+        startForegroundService(
+                serviceIntent);
+
+    } else {
+
+        startService(
+                serviceIntent);
+    }
+
+    String ip =
+            getLocalIpAddress();
+
+    if (ip != null) {
 
         urlText.setText(
-                "Телевизор пока не подключён");
+                "На телевизоре открой:\nhttp://"
+                + ip
+                + ":8080");
 
-        urlText.setTextSize(17);
+    } else {
 
-        Button startButton =
-                new Button(this);
-
-        startButton.setText(
-                "Начать трансляцию");
-
-        layout.addView(title);
-        layout.addView(statusText);
-        layout.addView(urlText);
-        layout.addView(startButton);
-
-        setContentView(layout);
-
-        startButton.setOnClickListener(
-                v -> startScreenCapture());
+        urlText.setText(
+                "IP-адрес не найден");
     }
+} 
 
     private void startScreenCapture() {
 
