@@ -94,6 +94,16 @@ public class ScreenCaptureService extends Service {
             Intent intent,
             int flags,
             int startId) {
+        if (intent == null) {
+    lastError = "DEBUG_INTENT_NULL";
+    return START_NOT_STICKY;
+}
+
+lastError =
+        "DEBUG_INTENT_OK RESULT="
+        + intent.getIntExtra("resultCode", -999)
+        + " DATA="
+        + (intent.getParcelableExtra("data") != null);
 
         if (intent == null) {
             stopSelf();
