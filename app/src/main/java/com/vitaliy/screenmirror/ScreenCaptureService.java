@@ -134,103 +134,96 @@ public class ScreenCaptureService extends Service {
                     2);
 
     imageReader.setOnImageAvailableListener(
-            reader -> {
+        reader -> {
 
-                Image image = null;
+            Image image = null;
 
-                try {
+            try {
+                image = reader.acquireLatestImage();
 
-                    image =
-                            reader.acquireLatestImage();
+                if (image == null) {
+                    return;
+                }
 
-                    if (image == null) {
-                        lastError = "IMAGE_NULL";
-                        return;
-                    }
+                Image.Plane plane = image.getPlanes()[0];
 
-                    Image.Plane plane =
-                            image.getPlanes()[0];
+                ByteBuffer buffer = plane.getBuffer();
 
-                    ByteBuffer buffer =
-                            plane.getBuffer();
+                int pixelStride = plane.getPixelStride();
+                int rowStride = plane.getRowStride();
 
-                    int pixelStride =
-                            plane.getPixelStride();
+                int rowPadding =
+                        rowStride - pixelStride * width;
 
-                    int rowStride =
-                            plane.getRowStride();
+                int bitmapWidth =
+                        width + rowPadding / pixelStride;
 
-                    int rowPadding =
-                            rowStride -
-                            pixelStride * width;
+                Bitmap bitmap =
+                        Bitmap.createBitmap(
+                                bitmapWidth,
+                                height,
+                                Bitmap.Config.ARGB_8888);
 
-                    int bitmapWidth =
-                            width +
-                            rowPadding / pixelStride;
+                buffer.rewind();
 
-                    Bitmap bitmap =
-                            Bitmap.createBitmap(
-                                    bitmapWidth,
-                                    height,
-                                    Bitmap.Config.ARGB_8888);
+                bitmap.copyPixelsFromBuffer(buffer);
 
-                    buffer.rewind();
+                Bitmap cropped =
+                        Bitmap.createBitmap(
+                                bitmap,
+                                0,
+                                0,
+                                width,
+                                height);
 
-                    bitmap.copyPixelsFromBuffer(
-                            buffer);
+                bitmap.recycle();
 
-                    Bitmap cropped =
-                            Bitmap.createBitmap(
-                                    bitmap,
-                                    0,
-                                    0,
-                                    width,
-                                    height);
+                ByteArrayOutputStream output =
+                        new ByteArrayOutputStream();
 
-                    bitmap.recycle();
+                cropped.compress(
+                        Bitmap.CompressFormat.JPEG,
+                        80,
+                        output);
 
-                    ByteArrayOutputStream output =
-                            new ByteArrayOutputStream();
+                cropped.recycle();
 
-                    cropped.compress(
-                            Bitmap.CompressFormat.JPEG,
-                            80,
-                            output);
+                byte[] frame =
+                        output.toByteArray();
 
-                    cropped.recycle();
-
-                    latestFrame =
-                            output.toByteArray();
+                if (frame.length > 0) {
+                    latestFrame = frame;
 
                     lastError =
                             "FRAME_OK " +
-                            latestFrame.length +
+                            frame.length +
                             " SIZE=" +
                             width +
                             "x" +
                             height;
-
-                } catch (Exception e) {
-
-                    lastError =
-                            e.getClass().getSimpleName()
-                            + ": "
-                            + e.getMessage();
-
-                    android.util.Log.e(
-                            "ScreenMirror",
-                            "ОШИБКА КАДРА",
-                            e);
-
-                } finally {
-
-                    if (image != null) {
-                        image.close();
-                    }
                 }
 
-            },
-            null);
+            } catch (Exception e) {
+
+                lastError =
+                        e.getClass().getSimpleName()
+                        + ": "
+                        + e.getMessage();
+
+                android.util.Log.e(
+                        "ScreenMirror",
+                        "ОШИБКА КАДРА",
+                        e);
+
+            } finally {
+
+                if (image != null) {
+                    image.close();
+                }
+            }
+
+        },
+        null);
 
     virtualDisplay =
             mediaProjection.createVirtualDisplay(
