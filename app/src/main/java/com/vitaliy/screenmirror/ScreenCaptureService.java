@@ -203,45 +203,182 @@ public class ScreenCaptureService extends Service {
                             height;
                 }
 
-            } catch (Exception e) {
+private void startProjection(
+        int resultCode,
+        Intent data) {
 
-                lastError =
-                        e.getClass().getSimpleName()
-                        + ": "
-                        + e.getMessage();
+    lastError = "PROJECTION_STARTED";
 
-                android.util.Log.e(
-                        "ScreenMirror",
-                        "ОШИБКА КАДРА",
-                        e);
+    MediaProjectionManager manager =
+            (MediaProjectionManager)
+                    getSystemService(
+                            MEDIA_PROJECTION_SERVICE);
 
-            } finally {
+    mediaProjection =
+            manager.getMediaProjection(
+                    resultCode,
+                    data);
 
-                if (image != null) {
-                    image.close();
-                }
-            }
+    if (mediaProjection == null) {
+        lastError = "MEDIA_PROJECTION_NULL";
+        return;
+    }
 
-        },
-        null);
+    lastError = "MEDIA_PROJECTION_OK";
 
-    virtualDisplay =
-            mediaProjection.createVirtualDisplay(
-                    "ScreenMirror",
+    DisplayMetrics metrics =
+            new DisplayMetrics();
+
+    DisplayManager displayManager =
+            (DisplayManager)
+                    getSystemService(
+                            DISPLAY_SERVICE);
+
+    android.view.Display display =
+            displayManager.getDisplay(
+                    android.view.Display.DEFAULT_DISPLAY);
+
+    if (display == null) {
+        lastError = "DISPLAY_NULL";
+        return;
+    }
+
+    display.getRealMetrics(metrics);
+
+    int width = metrics.widthPixels;
+    int height = metrics.heightPixels;
+    int density = metrics.densityDpi;
+
+    lastError =
+            "DISPLAY_SIZE " +
+            width +
+            "x" +
+            height;
+
+    imageReader =
+            ImageReader.newInstance(
                     width,
                     height,
-                    density,
-                    DisplayManager
-                            .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    imageReader.getSurface(),
-                    null,
-                    null);
+                    PixelFormat.RGBA_8888,
+                    3);
 
-    if (virtualDisplay == null) {
-        lastError = "VIRTUAL_DISPLAY_NULL";
-    } else {
-        lastError = "VIRTUAL_DISPLAY_OK";
-    }
+    imageReader.setOnImageAvailableListener(
+            reader -> {
+
+                Image image = null;
+
+                try {
+
+                    image =
+                            reader.acquireLatestImage();
+
+                    if (image == null) {
+                        return;
+                    }
+
+                    Image.Plane plane =
+                            image.getPlanes()[0];
+
+                    ByteBuffer buffer =
+                            plane.getBuffer();
+
+                    int pixelStride =
+                            plane.getPixelStride();
+
+                    int rowStride =
+                            plane.getRowStride();
+
+                    int rowBytes =
+                            width * pixelStride;
+
+                    byte[] pixels =
+                            new byte[rowBytes * height];
+
+                    for (int y = 0; y < height; y++) {
+
+                        int sourcePosition =
+                                y * rowStride;
+
+                        int destinationPosition =
+                                y * rowBytes;
+
+                        buffer.position(
+                                sourcePosition);
+
+                        buffer.get(
+                                pixels,
+                                destinationPosition,
+                                rowBytes);
+                    }
+
+                    Bitmap bitmap =
+                            Bitmap.createBitmap(
+                                    width,
+                                    height,
+                                    Bitmap.Config.ARGB_8888);
+
+                    ByteBuffer pixelBuffer =
+                            ByteBuffer.wrap(pixels);
+
+                    bitmap.copyPixelsFromBuffer(
+                            pixelBuffer);
+
+                    ByteArrayOutputStream output =
+                            new ByteArrayOutputStream();
+
+                    boolean compressed =
+                            bitmap.compress(
+                                    Bitmap.CompressFormat.JPEG,
+                                    80,
+                                    output);
+
+                    bitmap.recycle();
+
+                    if (!compressed) {
+                        lastError =
+                                "JPEG_COMPRESS_FAILED";
+                        return;
+                    }
+
+                    byte[] frame =
+                            output.toByteArray();
+
+                    if (frame.length > 0) {
+
+                        latestFrame =
+                                frame;
+
+                        lastError =
+                                "FRAME_OK " +
+                                frame.length +
+                                " SIZE=" +
+                                width +
+                                "x" +
+                                height;
+                    }
+
+                } catch (Exception e) {
+
+                    lastError =
+                            e.getClass()
+                                    .getSimpleName()
+                            + ": "
+                            + e.getMessage();
+
+                    android.util.Log.e(
+                            "ScreenMirror",
+                            "ОШИБКА КАДРА",
+                            e);
+
+                } finally {
+
+                    if (image != null) {
+                        image.close();
+                    }
+                }
+
+            },
+            null);
 
     mediaProjection.registerCallback(
             new MediaProjection.Callback() {
@@ -255,10 +392,60 @@ public class ScreenCaptureService extends Service {
                         virtualDisplay.release();
                         virtualDisplay = null;
                     }
+
+                    if (imageReader != null) {
+                        imageReader.close();
+                        imageReader = null;
+                    }
+
+                    lastError =
+                            "MEDIA_PROJECTION_STOPPED";
                 }
             },
             null);
+
+    try {
+
+        virtualDisplay =
+                mediaProjection.createVirtualDisplay(
+                        "ScreenMirror",
+                        width,
+                        height,
+                        density,
+                        DisplayManager
+                                .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        imageReader.getSurface(),
+                        null,
+                        null);
+
+        if (virtualDisplay == null) {
+
+            lastError =
+                    "VIRTUAL_DISPLAY_NULL";
+
+        } else {
+
+            lastError =
+                    "VIRTUAL_DISPLAY_OK " +
+                    width +
+                    "x" +
+                    height;
+        }
+
+    } catch (Exception e) {
+
+        lastError =
+                e.getClass()
+                        .getSimpleName()
+                + ": "
+                + e.getMessage();
+
+        android.util.Log.e(
+                "ScreenMirror",
+                "ОШИБКА VIRTUAL DISPLAY",
+                e);
     }
+                }
 
                
 
