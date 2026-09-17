@@ -136,7 +136,7 @@ lastError =
                             "data");
         }
 
-        if (resultCode != RESULT_OK ||
+        if (resultCode != -1 ||
         data == null) {
 
             lastError =
