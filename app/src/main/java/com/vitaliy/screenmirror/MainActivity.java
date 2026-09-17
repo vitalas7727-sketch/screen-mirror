@@ -132,6 +132,9 @@ public class MainActivity extends Activity {
 
         statusText.setText(
                 "OK: RESULT + DATA");
+        statusText.setText(
+        "DATA OK: "
+        + data.getExtras());
 
         Intent serviceIntent =
                 new Intent(
