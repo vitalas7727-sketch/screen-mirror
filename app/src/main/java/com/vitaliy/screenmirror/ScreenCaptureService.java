@@ -464,9 +464,7 @@ public class ScreenCaptureService extends Service {
                                     width,
                                     height,
                                     density,
-                                    DisplayManager
-                                            .VIRTUAL_DISPLAY_FLAG
-                                            .AUTO_MIRROR,
+                                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                                     imageReader
                                             .getSurface(),
                                     null,
