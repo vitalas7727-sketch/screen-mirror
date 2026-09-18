@@ -400,7 +400,7 @@ lastError =
                                                     Bitmap
                                                             .CompressFormat
                                                             .JPEG,
-                                                    60,
+                                                    80,
                                                     output);
 
                                     bitmap.recycle();
