@@ -457,13 +457,44 @@ lastError =
                     new MediaProjection.Callback() {
 
                         @Override
-                        public void onStop() {
+public void onStop() {
 
-                            lastError =
-                                    "MEDIA_PROJECTION_STOPPED";
+    lastError =
+            "MEDIA_PROJECTION_STOPPED";
 
-                            releaseProjectionResources();
-                        }
+    if (virtualDisplay != null) {
+
+        try {
+            virtualDisplay.release();
+        } catch (Exception ignored) {
+        }
+
+        virtualDisplay = null;
+    }
+
+    if (imageReader != null) {
+
+        try {
+            imageReader.close();
+        } catch (Exception ignored) {
+        }
+
+        imageReader = null;
+    }
+
+    if (imageThread != null) {
+
+        try {
+            imageThread.quitSafely();
+        } catch (Exception ignored) {
+        }
+
+        imageThread = null;
+        imageHandler = null;
+    }
+
+    mediaProjection = null;
+}
                     },
                     null);
 
