@@ -45,6 +45,7 @@ public class ScreenCaptureService extends Service {
     private Handler imageHandler;
 
     private volatile byte[] latestFrame;
+
     private volatile String lastError =
             "WAITING_FOR_PROJECTION";
 
@@ -78,8 +79,7 @@ public class ScreenCaptureService extends Service {
                     1,
                     notification,
                     ServiceInfo
-                            .FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            );
+                            .FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
 
         } else {
 
@@ -94,25 +94,16 @@ public class ScreenCaptureService extends Service {
             Intent intent,
             int flags,
             int startId) {
-        if (intent == null) {
-    lastError = "DEBUG_INTENT_NULL";
-    return START_NOT_STICKY;
-}
-
-lastError =
-        "DEBUG_INTENT_OK RESULT="
-        + intent.getIntExtra("resultCode", -999)
-        + " DATA="
-        + (intent.getParcelableExtra("data") != null);
 
         if (intent == null) {
+
+            lastError =
+                    "DEBUG_INTENT_NULL";
+
             stopSelf();
+
             return START_NOT_STICKY;
         }
-
-        running = true;
-
-        startWebServer();
 
         int resultCode =
                 intent.getIntExtra(
@@ -136,14 +127,24 @@ lastError =
                             "data");
         }
 
+        lastError =
+                "DEBUG_INTENT_OK RESULT="
+                + resultCode
+                + " DATA="
+                + (data != null);
+
         if (resultCode != -1 ||
-        data == null) {
+                data == null) {
 
             lastError =
                     "NO_PROJECTION_DATA";
 
             return START_NOT_STICKY;
         }
+
+        running = true;
+
+        startWebServer();
 
         startProjection(
                 resultCode,
@@ -400,7 +401,7 @@ lastError =
                                                     Bitmap
                                                             .CompressFormat
                                                             .JPEG,
-                                                    55, 
+                                                    55,
                                                     output);
 
                                     bitmap.recycle();
@@ -457,44 +458,13 @@ lastError =
                     new MediaProjection.Callback() {
 
                         @Override
-public void onStop() {
+                        public void onStop() {
 
-    lastError =
-            "MEDIA_PROJECTION_STOPPED";
+                            lastError =
+                                    "MEDIA_PROJECTION_STOPPED";
 
-    if (virtualDisplay != null) {
-
-        try {
-            virtualDisplay.release();
-        } catch (Exception ignored) {
-        }
-
-        virtualDisplay = null;
-    }
-
-    if (imageReader != null) {
-
-        try {
-            imageReader.close();
-        } catch (Exception ignored) {
-        }
-
-        imageReader = null;
-    }
-
-    if (imageThread != null) {
-
-        try {
-            imageThread.quitSafely();
-        } catch (Exception ignored) {
-        }
-
-        imageThread = null;
-        imageHandler = null;
-    }
-
-    mediaProjection = null;
-}
+                            releaseProjectionResourcesWithoutStop();
+                        }
                     },
                     null);
 
@@ -505,7 +475,8 @@ public void onStop() {
                                     width,
                                     height,
                                     density,
-                                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                                    DisplayManager
+                                            .VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                                     imageReader
                                             .getSurface(),
                                     null,
@@ -565,8 +536,8 @@ public void onStop() {
                             new Thread(
                                     () -> handleClient(
                                             socket),
-                                    "ScreenMirrorClient"
-                            ).start();
+                                    "ScreenMirrorClient")
+                                    .start();
                         }
 
                     } catch (Exception e) {
@@ -581,163 +552,165 @@ public void onStop() {
                     }
 
                 },
-                "ScreenMirrorServer"
-        ).start();
+                "ScreenMirrorServer")
+                .start();
     }
 
     private void handleClient(
-        Socket socket) {
-
-    try {
-
-        BufferedReader reader =
-                new BufferedReader(
-                        new InputStreamReader(
-                                socket.getInputStream()));
-
-        String requestLine =
-                reader.readLine();
-
-        if (requestLine == null) {
-            socket.close();
-            return;
-        }
-
-        String line;
-
-        while ((line =
-                reader.readLine()) != null) {
-
-            if (line.isEmpty()) {
-                break;
-            }
-        }
-
-        OutputStream output =
-                new BufferedOutputStream(
-                        socket.getOutputStream());
-
-        if (requestLine.contains(
-                "GET /stream")) {
-
-            sendMjpegStream(output);
-
-        } else if (requestLine.contains(
-                "GET /status")) {
-
-            sendStatus(output);
-
-        } else {
-
-            sendWebPage(output);
-        }
-
-    } catch (Exception e) {
-
-        android.util.Log.e(
-                "ScreenMirror",
-                "ОШИБКА CLIENT",
-                e);
-
-    } finally {
+            Socket socket) {
 
         try {
-            socket.close();
-        } catch (Exception ignored) {
+
+            BufferedReader reader =
+                    new BufferedReader(
+                            new InputStreamReader(
+                                    socket.getInputStream()));
+
+            String requestLine =
+                    reader.readLine();
+
+            if (requestLine == null) {
+
+                socket.close();
+
+                return;
+            }
+
+            String line;
+
+            while ((line =
+                    reader.readLine()) != null) {
+
+                if (line.isEmpty()) {
+                    break;
+                }
+            }
+
+            OutputStream output =
+                    new BufferedOutputStream(
+                            socket.getOutputStream());
+
+            if (requestLine.contains(
+                    "GET /stream")) {
+
+                sendMjpegStream(output);
+
+            } else if (requestLine.contains(
+                    "GET /status")) {
+
+                sendStatus(output);
+
+            } else {
+
+                sendWebPage(output);
+            }
+
+        } catch (Exception e) {
+
+            android.util.Log.e(
+                    "ScreenMirror",
+                    "ОШИБКА CLIENT",
+                    e);
+
+        } finally {
+
+            try {
+                socket.close();
+            } catch (Exception ignored) {
+            }
         }
     }
-        }
 
     private void sendWebPage(
-        OutputStream output)
-        throws Exception {
+            OutputStream output)
+            throws Exception {
 
-    String html =
-            "<!DOCTYPE html>" +
-            "<html>" +
-            "<head>" +
-            "<meta name='viewport' " +
-            "content='width=device-width,initial-scale=1'>" +
-            "<style>" +
-            "html,body{" +
-            "margin:0;" +
-            "padding:0;" +
-            "background:#000;" +
-            "width:100%;" +
-            "height:100%;" +
-            "overflow:hidden;" +
-            "}" +
-            "#screen{" +
-            "width:100%;" +
-            "height:100%;" +
-            "object-fit:contain;" +
-            "}" +
-            "#status{" +
-            "position:fixed;" +
-            "left:0;" +
-            "top:0;" +
-            "right:0;" +
-            "padding:12px;" +
-            "box-sizing:border-box;" +
-            "color:white;" +
-            "background:rgba(0,0,0,.75);" +
-            "font-family:sans-serif;" +
-            "font-size:14px;" +
-            "z-index:10;" +
-            "}" +
-            "</style>" +
-            "</head>" +
-            "<body>" +
-            "<div id='status'>" +
-            "Подключение..." +
-            "</div>" +
-            "<img id='screen' " +
-            "src='/stream'>" +
-            "<script>" +
-            "function updateStatus(){" +
-            "fetch('/status?t='+" +
-            "Date.now())" +
-            ".then(function(r){" +
-            "return r.text();" +
-            "})" +
-            ".then(function(t){" +
-            "document.getElementById(" +
-            "'status').textContent=t;" +
-            "})" +
-            ".catch(function(){" +
-            "document.getElementById(" +
-            "'status').textContent=" +
-            "'SERVER_ERROR';" +
-            "});" +
-            "}" +
-            "updateStatus();" +
-            "setInterval(" +
-            "updateStatus,1000);" +
-            "</script>" +
-            "</body>" +
-            "</html>";
+        String html =
+                "<!DOCTYPE html>" +
+                "<html>" +
+                "<head>" +
+                "<meta name='viewport' " +
+                "content='width=device-width,initial-scale=1'>" +
+                "<style>" +
+                "html,body{" +
+                "margin:0;" +
+                "padding:0;" +
+                "background:#000;" +
+                "width:100%;" +
+                "height:100%;" +
+                "overflow:hidden;" +
+                "}" +
+                "#screen{" +
+                "width:100%;" +
+                "height:100%;" +
+                "object-fit:contain;" +
+                "}" +
+                "#status{" +
+                "position:fixed;" +
+                "left:0;" +
+                "top:0;" +
+                "right:0;" +
+                "padding:12px;" +
+                "box-sizing:border-box;" +
+                "color:white;" +
+                "background:rgba(0,0,0,.75);" +
+                "font-family:sans-serif;" +
+                "font-size:14px;" +
+                "z-index:10;" +
+                "}" +
+                "</style>" +
+                "</head>" +
+                "<body>" +
+                "<div id='status'>" +
+                "Подключение..." +
+                "</div>" +
+                "<img id='screen' " +
+                "src='/stream'>" +
+                "<script>" +
+                "function updateStatus(){" +
+                "fetch('/status?t='+" +
+                "Date.now())" +
+                ".then(function(r){" +
+                "return r.text();" +
+                "})" +
+                ".then(function(t){" +
+                "document.getElementById(" +
+                "'status').textContent=t;" +
+                "})" +
+                ".catch(function(){" +
+                "document.getElementById(" +
+                "'status').textContent=" +
+                "'SERVER_ERROR';" +
+                "});" +
+                "}" +
+                "updateStatus();" +
+                "setInterval(" +
+                "updateStatus,1000);" +
+                "</script>" +
+                "</body>" +
+                "</html>";
 
-    byte[] bytes =
-            html.getBytes("UTF-8");
+        byte[] bytes =
+                html.getBytes("UTF-8");
 
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: text/html; " +
-            "charset=UTF-8\r\n" +
-            "Content-Length: " +
-            bytes.length +
-            "\r\n" +
-            "Cache-Control: no-store\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
+        String header =
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: text/html; " +
+                "charset=UTF-8\r\n" +
+                "Content-Length: " +
+                bytes.length +
+                "\r\n" +
+                "Cache-Control: no-store\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
 
-    output.write(
-            header.getBytes("UTF-8"));
+        output.write(
+                header.getBytes("UTF-8"));
 
-    output.write(bytes);
+        output.write(bytes);
 
-    output.flush();
-}
+        output.flush();
+    }
 
     private void sendFrame(
             OutputStream output)
@@ -798,61 +771,62 @@ public void onStop() {
         output.flush();
     }
 
+    private void sendMjpegStream(
+            OutputStream output)
+            throws Exception {
+
+        String header =
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: multipart/x-mixed-replace; " +
+                "boundary=frame\r\n" +
+                "Cache-Control: no-cache, no-store\r\n" +
+                "Pragma: no-cache\r\n" +
+                "Connection: keep-alive\r\n" +
+                "\r\n";
+
+        output.write(
+                header.getBytes("UTF-8"));
+
+        output.flush();
+
+        byte[] lastSent = null;
+
+        while (running) {
+
+            byte[] frame =
+                    latestFrame;
+
+            if (frame != null &&
+                    frame != lastSent) {
+
+                String frameHeader =
+                        "--frame\r\n" +
+                        "Content-Type: image/jpeg\r\n" +
+                        "Content-Length: " +
+                        frame.length +
+                        "\r\n" +
+                        "\r\n";
+
+                output.write(
+                        frameHeader.getBytes("UTF-8"));
+
+                output.write(frame);
+
+                output.write(
+                        "\r\n".getBytes("UTF-8"));
+
+                output.flush();
+
+                lastSent = frame;
+            }
+
+            Thread.sleep(15);
+        }
+    }
+
     private void sendStatus(
             OutputStream output)
             throws Exception {
-    private void sendMjpegStream(
-        OutputStream output)
-        throws Exception {
-
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: multipart/x-mixed-replace; " +
-            "boundary=frame\r\n" +
-            "Cache-Control: no-cache, no-store\r\n" +
-            "Pragma: no-cache\r\n" +
-            "Connection: keep-alive\r\n" +
-            "\r\n";
-
-    output.write(
-            header.getBytes("UTF-8"));
-
-    output.flush();
-
-    byte[] lastSent = null;
-
-    while (running) {
-
-        byte[] frame =
-                latestFrame;
-
-        if (frame != null &&
-                frame != lastSent) {
-
-            String frameHeader =
-                    "--frame\r\n" +
-                    "Content-Type: image/jpeg\r\n" +
-                    "Content-Length: " +
-                    frame.length +
-                    "\r\n" +
-                    "\r\n";
-
-            output.write(
-                    frameHeader.getBytes("UTF-8"));
-
-            output.write(frame);
-
-            output.write(
-                    "\r\n".getBytes("UTF-8"));
-
-            output.flush();
-
-            lastSent = frame;
-        }
-
-        Thread.sleep(30);
-    }
-    }
 
         String status =
                 lastError;
@@ -880,6 +854,23 @@ public void onStop() {
     }
 
     private void releaseProjectionResources() {
+
+        releaseProjectionResourcesWithoutStop();
+
+        if (mediaProjection != null) {
+
+            try {
+                mediaProjection.stop();
+            } catch (Exception ignored) {
+            }
+
+            mediaProjection = null;
+        }
+
+        latestFrame = null;
+    }
+
+    private void releaseProjectionResourcesWithoutStop() {
 
         if (virtualDisplay != null) {
 
@@ -911,18 +902,6 @@ public void onStop() {
             imageThread = null;
             imageHandler = null;
         }
-
-        if (mediaProjection != null) {
-
-            try {
-                mediaProjection.stop();
-            } catch (Exception ignored) {
-            }
-
-            mediaProjection = null;
-        }
-
-        latestFrame = null;
     }
 
     private void createNotificationChannel() {
@@ -978,4 +957,4 @@ public void onStop() {
 
         return null;
     }
-    }
+            }
