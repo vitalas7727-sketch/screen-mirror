@@ -400,7 +400,7 @@ lastError =
                                                     Bitmap
                                                             .CompressFormat
                                                             .JPEG,
-                                                    80,
+                                                    55, 
                                                     output);
 
                                     bitmap.recycle();
@@ -723,7 +723,7 @@ public void onStop() {
                 "img.src=next.src;" +
                 "img.style.display='block';" +
                 "status.style.display='none';" +
-                "setTimeout(loadFrame,100);" +
+                "setTimeout(loadFrame,30);" +
                 "};" +
                 "next.onerror=function(){" +
                 "updateStatus();" +
