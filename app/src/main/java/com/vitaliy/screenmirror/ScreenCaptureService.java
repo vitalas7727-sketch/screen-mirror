@@ -622,95 +622,97 @@ public class ScreenCaptureService extends Service {
     }
 
     private void sendWebPage(
-            OutputStream output)
-            throws Exception {
+        OutputStream output)
+        throws Exception {
 
-        String html =
-                "<!DOCTYPE html>" +
-                "<html>" +
-                "<head>" +
-                "<meta name='viewport' " +
-                "content='width=device-width,initial-scale=1'>" +
-                "<style>" +
-                "html,body{" +
-                "margin:0;" +
-                "padding:0;" +
-                "background:#000;" +
-                "width:100%;" +
-                "height:100%;" +
-                "overflow:hidden;" +
-                "}" +
-                "#screen{" +
-                "width:100%;" +
-                "height:100%;" +
-                "object-fit:contain;" +
-                "}" +
-                "#status{" +
-                "position:fixed;" +
-                "left:0;" +
-                "top:0;" +
-                "right:0;" +
-                "padding:12px;" +
-                "box-sizing:border-box;" +
-                "color:white;" +
-                "background:rgba(0,0,0,.75);" +
-                "font-family:sans-serif;" +
-                "font-size:14px;" +
-                "z-index:10;" +
-                "}" +
-                "</style>" +
-                "</head>" +
-                "<body>" +
-                "<div id='status'>" +
-                "Подключение..." +
-                "</div>" +
-                "<img id='screen' " +
-                "src='/stream'>" +
-                "<script>" +
-                "function updateStatus(){" +
-                "fetch('/status?t='+" +
-                "Date.now())" +
-                ".then(function(r){" +
-                "return r.text();" +
-                "})" +
-                ".then(function(t){" +
-                "document.getElementById(" +
-                "'status').textContent=t;" +
-                "})" +
-                ".catch(function(){" +
-                "document.getElementById(" +
-                "'status').textContent=" +
-                "'SERVER_ERROR';" +
-                "});" +
-                "}" +
-                "updateStatus();" +
-                "setInterval(" +
-                "updateStatus,1000);" +
-                "</script>" +
-                "</body>" +
-                "</html>";
+    String html =
+            "<!DOCTYPE html>" +
+            "<html>" +
+            "<head>" +
+            "<meta name='viewport' " +
+            "content='width=device-width,initial-scale=1'>" +
+            "<style>" +
+            "html,body{" +
+            "margin:0;" +
+            "padding:0;" +
+            "background:#000;" +
+            "width:100%;" +
+            "height:100%;" +
+            "overflow:hidden;" +
+            "}" +
+            "#screen{" +
+            "width:100%;" +
+            "height:100%;" +
+            "object-fit:contain;" +
+            "}" +
+            "#status{" +
+            "position:fixed;" +
+            "left:0;" +
+            "top:0;" +
+            "right:0;" +
+            "padding:12px;" +
+            "box-sizing:border-box;" +
+            "color:white;" +
+            "background:rgba(0,0,0,.75);" +
+            "font-family:sans-serif;" +
+            "font-size:14px;" +
+            "z-index:10;" +
+            "}" +
+            "</style>" +
+            "</head>" +
+            "<body>" +
+            "<div id='status'>" +
+            "Подключение..." +
+            "</div>" +
+            "<img id='screen'>" +
+            "<script>" +
+            "function updateFrame(){" +
+            "document.getElementById('screen').src=" +
+            "'/frame?t='+Date.now();" +
+            "}" +
+            "function updateStatus(){" +
+            "fetch('/status?t='+Date.now())" +
+            ".then(function(r){" +
+            "return r.text();" +
+            "})" +
+            ".then(function(t){" +
+            "document.getElementById('status')" +
+            ".textContent=t;" +
+            "})" +
+            ".catch(function(){" +
+            "document.getElementById('status')" +
+            ".textContent='SERVER_ERROR';" +
+            "});" +
+            "}" +
+            "updateFrame();" +
+            "updateStatus();" +
+            "setInterval(updateFrame,100);" +
+            "setInterval(updateStatus,1000);" +
+            "</script>" +
+            "</body>" +
+            "</html>";
 
-        byte[] bytes =
-                html.getBytes("UTF-8");
+    byte[] bytes =
+            html.getBytes("UTF-8");
 
-        String header =
-                "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: text/html; " +
-                "charset=UTF-8\r\n" +
-                "Content-Length: " +
-                bytes.length +
-                "\r\n" +
-                "Cache-Control: no-store\r\n" +
-                "Connection: close\r\n" +
-                "\r\n";
+    String header =
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: text/html; " +
+            "charset=UTF-8\r\n" +
+            "Content-Length: " +
+            bytes.length +
+            "\r\n" +
+            "Cache-Control: no-store\r\n" +
+            "Connection: close\r\n" +
+            "\r\n";
 
-        output.write(
-                header.getBytes("UTF-8"));
+    output.write(
+            header.getBytes("UTF-8"));
 
-        output.write(bytes);
+    output.write(bytes);
 
-        output.flush();
-    }
+    output.flush();
+}
 
     private void sendFrame(
             OutputStream output)
