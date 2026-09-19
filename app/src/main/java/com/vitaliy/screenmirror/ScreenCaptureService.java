@@ -591,12 +591,12 @@ public class ScreenCaptureService extends Service {
                             socket.getOutputStream());
 
             if (requestLine.contains(
-                    "GET /stream")) {
+        "GET /frame")) {
 
-                sendMjpegStream(output);
+    sendFrame(output);
 
-            } else if (requestLine.contains(
-                    "GET /status")) {
+} else if (requestLine.contains(
+        "GET /status")) {
 
                 sendStatus(output);
 
