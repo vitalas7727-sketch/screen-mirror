@@ -401,7 +401,7 @@ public class ScreenCaptureService extends Service {
                                                     Bitmap
                                                             .CompressFormat
                                                             .JPEG,
-                                                    55,
+                                                    30,
                                                     output);
 
                                     bitmap.recycle();
