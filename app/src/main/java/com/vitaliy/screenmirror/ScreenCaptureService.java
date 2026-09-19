@@ -222,18 +222,18 @@ public class ScreenCaptureService extends Service {
             }
 
             DisplayMetrics metrics =
-                    new DisplayMetrics();
+        new DisplayMetrics();
 
-            display.getRealMetrics(metrics);
+display.getRealMetrics(metrics);
 
-            int width =
-                    metrics.widthPixels;
+int width =
+        metrics.widthPixels;
 
-            int height =
-                    metrics.heightPixels;
+int height =
+        metrics.heightPixels;
 
-            int density =
-                    metrics.densityDpi;
+int density =
+        metrics.densityDpi;
 
             if (width <= 0 ||
                     height <= 0) {
