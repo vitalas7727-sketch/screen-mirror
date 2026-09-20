@@ -235,6 +235,18 @@ int height =
 int density =
         metrics.densityDpi;
 
+if (width > 720) {
+
+    float scale =
+            720f / width;
+
+    width =
+            Math.round(width * scale);
+
+    height =
+            Math.round(height * scale);
+}
+
             if (width <= 0 ||
                     height <= 0) {
 
