@@ -698,7 +698,7 @@ if (width > 720) {
             "}" +
             "updateFrame();" +
             "updateStatus();" +
-            "setInterval(uBUFFER_TOO_50);" +
+            "setInterval(BUFFER_TOO_S100);" +
             "setInterval(updateStatus,1000);" +
             "</script>" +
             "</body>" +
