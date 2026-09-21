@@ -698,7 +698,7 @@ if (width > 720) {
             "}" +
             "updateFrame();" +
 "updateStatus();" +
-"setInterval(updateFrame,100);" +
+"setInterval(updateFrame,50);" +
 "setInterval(updateStatus,1000);" +
             "</script>" +
             "</body>" +
