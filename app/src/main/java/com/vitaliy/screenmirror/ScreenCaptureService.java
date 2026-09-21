@@ -409,12 +409,12 @@ if (width > 720) {
                                             new ByteArrayOutputStream();
 
                                     boolean compressed =
-                                            bitmap.compress(
-                                                    Bitmap
-        .CompressFormat
-        .JPEG,
-20,
-output
+        bitmap.compress(
+                Bitmap
+                        .CompressFormat
+                        .JPEG,
+                20,
+                output);
 
                                     bitmap.recycle();
 
