@@ -696,10 +696,21 @@ if (width > 720) {
             ".textContent='SERVER_ERROR';" +
             "});" +
             "}" +
-            "updateFrame();" +
-            "updateStatus();" +
-            "setInterval(updateFrame,100);" +
-            "setInterval(updateStatus,1000);" +
+            function nextFrame(){
+    var screen =
+        document.getElementById('screen');
+
+    screen.onload = function(){
+        setTimeout(nextFrame, 10);
+    };
+
+    screen.src =
+        '/frame?t=' + Date.now();
+}
+
+nextFrame();
+updateStatus();
+setInterval(updateStatus,1000);
             "</script>" +
             "</body>" +
             "</html>";
