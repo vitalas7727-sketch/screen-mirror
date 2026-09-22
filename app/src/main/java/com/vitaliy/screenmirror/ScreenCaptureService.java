@@ -411,7 +411,7 @@ if (width > 720) {
 boolean compressed =
         bitmap.compress(
                 Bitmap.CompressFormat.JPEG,
-                5,
+                1,
                 output);
 
 bitmap.recycle();
