@@ -411,7 +411,7 @@ if (width > 720) {
 boolean compressed =
         bitmap.compress(
                 Bitmap.CompressFormat.JPEG,
-                05,
+                30,
                 output);
 
 bitmap.recycle();
@@ -700,7 +700,7 @@ bitmap.recycle();
             "}" +
             "updateFrame();" +
 "updateStatus();" +
-"setInterval(updateFrame,50);" +
+"setInterval(updateFrame,20);" +
 "setInterval(updateStatus,1000);" +
             "</script>" +
             "</body>" +
