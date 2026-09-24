@@ -600,9 +600,9 @@ boolean compressed =
                             socket.getOutputStream());
 
             if (requestLine.contains(
-        "GET /frame")) {
+        "GET /stream")) {
 
-    sendFrame(output);
+    sendMjpegStream(output);
 
 } else if (requestLine.contains(
         "GET /status")) {
