@@ -682,11 +682,8 @@ bitmap.recycle();
             "<script>" +
             "function updateFrame(){" +
             "function updateFrame(){" +
-"var screen=document.getElementById('screen');" +
-"screen.onload=function(){" +
-"setTimeout(updateFrame,1);" +
-"};" +
-"screen.src='/frame?t='+Date.now();" +
+"document.getElementById('screen').src=" +
+"'/frame?t='+Date.now();" +
 "}" +
             "function updateStatus(){" +
             "fetch('/status?t='+Date.now())" +
@@ -704,7 +701,7 @@ bitmap.recycle();
             "}" +
             "updateFrame();" +
 "updateStatus();" +
-
+"setInterval(updateFrame,10);" +
 "setInterval(updateStatus,1000);" +
             "</script>" +
             "</body>" +
