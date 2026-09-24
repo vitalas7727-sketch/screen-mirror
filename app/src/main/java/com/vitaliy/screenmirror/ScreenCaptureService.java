@@ -413,11 +413,6 @@ boolean compressed =
                 Bitmap.CompressFormat.JPEG,
                 30,
                 output);
-
-bitmap.recycle();
-
-        
-
                                     bitmap.recycle();
 
                                     if (!compressed) {
@@ -680,26 +675,25 @@ bitmap.recycle();
             "</div>" +
             "<img id='screen'>" +
             "<script>" +
-            "function updateFrame(){" +
-            "function updateFrame(){" +
+"function updateFrame(){" +
 "document.getElementById('screen').src=" +
 "'/frame?t='+Date.now();" +
 "}" +
-            "function updateStatus(){" +
-            "fetch('/status?t='+Date.now())" +
-            ".then(function(r){" +
-            "return r.text();" +
-            "})" +
-            ".then(function(t){" +
-            "document.getElementById('status')" +
-            ".textContent=t;" +
-            "})" +
-            ".catch(function(){" +
-            "document.getElementById('status')" +
-            ".textContent='SERVER_ERROR';" +
-            "});" +
-            "}" +
-            "updateFrame();" +
+"function updateStatus(){" +
+"fetch('/status?t='+Date.now())" +
+".then(function(r){" +
+"return r.text();" +
+"})" +
+".then(function(t){" +
+"document.getElementById('status')" +
+".textContent=t;" +
+"})" +
+".catch(function(){" +
+"document.getElementById('status')" +
+".textContent='SERVER_ERROR';" +
+"});" +
+"}" +
+"updateFrame();" +
 "updateStatus();" +
 "setInterval(updateFrame,10);" +
 "setInterval(updateStatus,1000);" +
