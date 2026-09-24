@@ -695,7 +695,6 @@ boolean compressed =
 "}" +
 "updateFrame();" +
 "updateStatus();" +
-"setInterval(updateFrame,10);" +
 "setInterval(updateStatus,1000);" +
             "</script>" +
             "</body>" +
