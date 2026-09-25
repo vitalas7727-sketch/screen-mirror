@@ -25,6 +25,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -37,36 +38,45 @@ public class ScreenCaptureService extends Service {
     private static final int PORT = 8080;
 
     /*
-     * Оптимизация задержки:
-     * меньший кадр быстрее кодируется,
-     * передаётся по Wi-Fi и декодируется ТВ.
+     * Разрешение кадра.
+     *
+     * 640 px сейчас используем как режим
+     * минимальной задержки.
      */
     private static final int MAX_WIDTH = 640;
 
     /*
-     * JPEG ниже 25 уменьшает размер кадра.
-     * Для зеркалирования экрана 18 достаточно.
+     * Низкое качество JPEG уменьшает
+     * размер передаваемого кадра.
      */
     private static final int JPEG_QUALITY = 18;
 
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
+
     private ServerSocket serverSocket;
 
     private HandlerThread imageThread;
     private Handler imageHandler;
 
+    /*
+     * Последний полностью готовый JPEG-кадр.
+     */
     private volatile byte[] latestFrame;
 
     private volatile String lastError =
             "WAITING_FOR_PROJECTION";
 
-    private volatile boolean running = true;
-    private volatile boolean serverStarted = false;
+    private volatile boolean running =
+            true;
+
+    private volatile boolean serverStarted =
+            false;
 
     @Override
     public void onCreate() {
+
         super.onCreate();
 
         running = true;
@@ -146,7 +156,11 @@ public class ScreenCaptureService extends Service {
                 + " DATA="
                 + (data != null);
 
-        if (resultCode == -1 ||
+        /*
+         * RESULT_OK для MediaProjection
+         * равен -1.
+         */
+        if (resultCode != -1 ||
                 data == null) {
 
             lastError =
@@ -157,8 +171,16 @@ public class ScreenCaptureService extends Service {
 
         running = true;
 
+        /*
+         * Сначала запускаем сервер.
+         * Он не зависит от успешности
+         * запуска захвата экрана.
+         */
         startWebServer();
 
+        /*
+         * Затем запускаем захват.
+         */
         startProjection(
                 resultCode,
                 data);
@@ -237,28 +259,27 @@ public class ScreenCaptureService extends Service {
             DisplayMetrics metrics =
                     new DisplayMetrics();
 
-            display.getRealMetrics(metrics);
+            display.getRealMetrics(
+                    metrics);
 
-            int width =
+            int originalWidth =
                     metrics.widthPixels;
 
-            int height =
+            int originalHeight =
                     metrics.heightPixels;
+
+            int width =
+                    originalWidth;
+
+            int height =
+                    originalHeight;
 
             int density =
                     metrics.densityDpi;
 
             /*
-             * Ограничиваем ширину 640 px.
-             *
-             * Это уменьшает:
-             * 1. объём захватываемых данных;
-             * 2. работу Bitmap;
-             * 3. время JPEG-кодирования;
-             * 4. размер кадра по Wi-Fi;
-             * 5. нагрузку браузера ТВ.
+             * Уменьшаем разрешение пропорционально.
              */
-
             if (width > MAX_WIDTH) {
 
                 float scale =
@@ -290,13 +311,15 @@ public class ScreenCaptureService extends Service {
                     "DISPLAY_SIZE "
                     + width
                     + "x"
-                    + height;
+                    + height
+                    + " ORIGINAL="
+                    + originalWidth
+                    + "x"
+                    + originalHeight;
 
             /*
-             * Всего 2 изображения.
-             *
-             * acquireLatestImage() берёт только
-             * самый свежий кадр и отбрасывает старые.
+             * Два буфера подходят для
+             * acquireLatestImage().
              */
             imageReader =
                     ImageReader.newInstance(
@@ -319,10 +342,15 @@ public class ScreenCaptureService extends Service {
                     .setOnImageAvailableListener(
                             reader -> {
 
-                                Image image = null;
+                                Image image =
+                                        null;
 
                                 try {
 
+                                    /*
+                                     * Берём только самый свежий
+                                     * кадр.
+                                     */
                                     image =
                                             reader
                                                     .acquireLatestImage();
@@ -397,6 +425,9 @@ public class ScreenCaptureService extends Service {
                                         return;
                                     }
 
+                                    /*
+                                     * Упаковываем строки без padding.
+                                     */
                                     byte[] pixels =
                                             new byte[
                                                     rowBytes *
@@ -458,24 +489,28 @@ public class ScreenCaptureService extends Service {
                                     byte[] frame =
                                             output.toByteArray();
 
-                                    if (frame.length > 0) {
-
-                                        /*
-                                         * Важный момент:
-                                         * публикуем только полностью
-                                         * готовый кадр.
-                                         */
-                                        latestFrame =
-                                                frame;
+                                    if (frame.length <= 0) {
 
                                         lastError =
-                                                "FRAME_OK "
-                                                + frame.length
-                                                + " SIZE="
-                                                + imageWidth
-                                                + "x"
-                                                + imageHeight;
+                                                "JPEG_EMPTY";
+
+                                        return;
                                     }
+
+                                    /*
+                                     * Публикуем только полностью
+                                     * готовый JPEG.
+                                     */
+                                    latestFrame =
+                                            frame;
+
+                                    lastError =
+                                            "FRAME_OK "
+                                            + frame.length
+                                            + " SIZE="
+                                            + imageWidth
+                                            + "x"
+                                            + imageHeight;
 
                                 } catch (Exception e) {
 
@@ -493,6 +528,7 @@ public class ScreenCaptureService extends Service {
                                 } finally {
 
                                     if (image != null) {
+
                                         image.close();
                                     }
                                 }
@@ -500,6 +536,10 @@ public class ScreenCaptureService extends Service {
                             },
                             imageHandler);
 
+            /*
+             * Callback регистрируем до создания
+             * VirtualDisplay.
+             */
             mediaProjection.registerCallback(
                     new MediaProjection.Callback() {
 
@@ -559,33 +599,73 @@ public class ScreenCaptureService extends Service {
 
     private void startWebServer() {
 
-        if (serverStarted) {
+        /*
+         * Если сервер уже действительно
+         * работает — ничего не делаем.
+         */
+        if (serverStarted &&
+                serverSocket != null &&
+                !serverSocket.isClosed()) {
+
             return;
         }
 
-        serverStarted = true;
-
+        /*
+         * Важный момент:
+         * НЕ ставим serverStarted=true
+         * заранее.
+         *
+         * Сначала реально открываем порт.
+         */
         new Thread(
                 () -> {
 
                     try {
 
-                        serverSocket =
-                                new ServerSocket(
-                                        PORT);
+                        ServerSocket newServerSocket =
+                                new ServerSocket();
 
-                        while (running) {
+                        newServerSocket.setReuseAddress(
+                                true);
+
+                        newServerSocket.bind(
+                                new InetSocketAddress(
+                                        PORT));
+
+                        serverSocket =
+                                newServerSocket;
+
+                        serverStarted =
+                                true;
+
+                        lastError =
+                                "SERVER_OK PORT="
+                                + PORT;
+
+                        android.util.Log.i(
+                                "ScreenMirror",
+                                "СЕРВЕР ЗАПУЩЕН PORT="
+                                + PORT);
+
+                        while (running &&
+                                !serverSocket.isClosed()) {
 
                             Socket socket =
                                     serverSocket.accept();
 
-                            /*
-                             * TCP_NODELAY:
-                             * отключаем задержку мелких
-                             * TCP-пакетов.
-                             */
                             try {
-                                socket.setTcpNoDelay(true);
+
+                                socket.setTcpNoDelay(
+                                        true);
+
+                            } catch (Exception ignored) {
+                            }
+
+                            try {
+
+                                socket.setKeepAlive(
+                                        true);
+
                             } catch (Exception ignored) {
                             }
 
@@ -598,6 +678,16 @@ public class ScreenCaptureService extends Service {
 
                     } catch (Exception e) {
 
+                        serverStarted =
+                                false;
+
+                        lastError =
+                                "SERVER_ERROR "
+                                + e.getClass()
+                                        .getSimpleName()
+                                + ": "
+                                + e.getMessage();
+
                         if (running) {
 
                             android.util.Log.e(
@@ -605,6 +695,25 @@ public class ScreenCaptureService extends Service {
                                     "ОШИБКА СЕРВЕРА",
                                     e);
                         }
+
+                    } finally {
+
+                        serverStarted =
+                                false;
+
+                        try {
+
+                            if (serverSocket != null) {
+
+                                serverSocket.close();
+
+                            }
+
+                        } catch (Exception ignored) {
+                        }
+
+                        serverSocket =
+                                null;
                     }
 
                 },
@@ -626,8 +735,6 @@ public class ScreenCaptureService extends Service {
                     reader.readLine();
 
             if (requestLine == null) {
-
-                socket.close();
 
                 return;
             }
@@ -677,7 +784,9 @@ public class ScreenCaptureService extends Service {
         } finally {
 
             try {
+
                 socket.close();
+
             } catch (Exception ignored) {
             }
         }
@@ -726,7 +835,8 @@ public class ScreenCaptureService extends Service {
                 "<div id='status'>" +
                 "Подключение..." +
                 "</div>" +
-                "<img id='screen' src='/stream'>" +
+                "<img id='screen' " +
+                "src='/stream'>" +
                 "<script>" +
                 "function updateStatus(){" +
                 "fetch('/status?t='+Date.now())" +
@@ -771,70 +881,68 @@ public class ScreenCaptureService extends Service {
     }
 
     private void sendMjpegStream(
-        OutputStream output)
-        throws Exception {
+            OutputStream output)
+            throws Exception {
 
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: multipart/x-mixed-replace; " +
-            "boundary=frame\r\n" +
-            "Cache-Control: no-cache, no-store, " +
-            "must-revalidate, max-age=0\r\n" +
-            "Pragma: no-cache\r\n" +
-            "Expires: 0\r\n" +
-            "Connection: keep-alive\r\n" +
-            "X-Accel-Buffering: no\r\n" +
-            "\r\n";
+        String header =
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: multipart/x-mixed-replace; " +
+                "boundary=frame\r\n" +
+                "Cache-Control: no-cache, no-store, " +
+                "must-revalidate, max-age=0\r\n" +
+                "Pragma: no-cache\r\n" +
+                "Expires: 0\r\n" +
+                "Connection: keep-alive\r\n" +
+                "X-Accel-Buffering: no\r\n" +
+                "\r\n";
 
-    output.write(
-            header.getBytes("UTF-8"));
+        output.write(
+                header.getBytes("UTF-8"));
 
-    output.flush();
+        output.flush();
 
-    byte[] lastSent = null;
+        byte[] lastSent = null;
 
-    while (running) {
+        while (running) {
 
-        byte[] frame =
-                latestFrame;
+            byte[] frame =
+                    latestFrame;
 
-        if (frame != null &&
-                frame != lastSent) {
+            if (frame != null &&
+                    frame != lastSent) {
 
-            String frameHeader =
-                    "--frame\r\n" +
-                    "Content-Type: image/jpeg\r\n" +
-                    "Content-Length: " +
-                    frame.length +
-                    "\r\n" +
-                    "Cache-Control: no-cache, " +
-                    "no-store, max-age=0\r\n" +
-                    "\r\n";
+                String frameHeader =
+                        "--frame\r\n" +
+                        "Content-Type: image/jpeg\r\n" +
+                        "Content-Length: " +
+                        frame.length +
+                        "\r\n" +
+                        "Cache-Control: no-cache, " +
+                        "no-store, max-age=0\r\n" +
+                        "\r\n";
 
-            output.write(
-                    frameHeader.getBytes("UTF-8"));
+                output.write(
+                        frameHeader.getBytes("UTF-8"));
 
-            output.write(frame);
+                output.write(frame);
 
-            output.write(
-                    "\r\n".getBytes("UTF-8"));
+                output.write(
+                        "\r\n".getBytes("UTF-8"));
 
-            output.flush();
+                output.flush();
 
-            lastSent = frame;
+                lastSent =
+                        frame;
+            }
+
+            /*
+             * Короткая уступка процессора.
+             * Она не добавляет фиксированную
+             * задержку кадру.
+             */
+            Thread.yield();
         }
-
-        /*
-         * Не крутим процессор впустую.
-         * 2 мс практически не влияют
-         * на задержку передачи кадра.
-         */
-        Thread.sleep(2);
     }
-        }
-    
-
-    
 
     private void sendStatus(
             OutputStream output)
@@ -872,14 +980,18 @@ public class ScreenCaptureService extends Service {
         if (mediaProjection != null) {
 
             try {
+
                 mediaProjection.stop();
+
             } catch (Exception ignored) {
             }
 
-            mediaProjection = null;
+            mediaProjection =
+                    null;
         }
 
-        latestFrame = null;
+        latestFrame =
+                null;
     }
 
     private void releaseProjectionResourcesWithoutStop() {
@@ -887,32 +999,43 @@ public class ScreenCaptureService extends Service {
         if (virtualDisplay != null) {
 
             try {
+
                 virtualDisplay.release();
+
             } catch (Exception ignored) {
             }
 
-            virtualDisplay = null;
+            virtualDisplay =
+                    null;
         }
 
         if (imageReader != null) {
 
             try {
+
                 imageReader.close();
+
             } catch (Exception ignored) {
             }
 
-            imageReader = null;
+            imageReader =
+                    null;
         }
 
         if (imageThread != null) {
 
             try {
+
                 imageThread.quitSafely();
+
             } catch (Exception ignored) {
             }
 
-            imageThread = null;
-            imageHandler = null;
+            imageThread =
+                    null;
+
+            imageHandler =
+                    null;
         }
     }
 
@@ -943,18 +1066,22 @@ public class ScreenCaptureService extends Service {
     @Override
     public void onDestroy() {
 
-        running = false;
+        running =
+                false;
 
         releaseProjectionResources();
 
-        serverStarted = false;
+        serverStarted =
+                false;
 
         try {
 
             if (serverSocket != null) {
 
                 serverSocket.close();
-                serverSocket = null;
+
+                serverSocket =
+                        null;
             }
 
         } catch (Exception ignored) {
@@ -969,4 +1096,4 @@ public class ScreenCaptureService extends Service {
 
         return null;
     }
-    }
+}
