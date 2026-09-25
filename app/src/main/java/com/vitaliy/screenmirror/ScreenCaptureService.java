@@ -771,62 +771,70 @@ public class ScreenCaptureService extends Service {
     }
 
     private void sendMjpegStream(
-            OutputStream output)
-            throws Exception {
+        OutputStream output)
+        throws Exception {
 
-        String header =
-                "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: multipart/x-mixed-replace; " +
-                "boundary=frame\r\n" +
-                "Cache-Control: no-cache, no-store, " +
-                "must-revalidate, max-age=0\r\n" +
-                "Pragma: no-cache\r\n" +
-                "Expires: 0\r\n" +
-                "Connection: keep-alive\r\n" +
-                "X-Accel-Buffering: no\r\n" +
-                "\r\n";
+    String header =
+            "HTTP/1.1 200 OK\r\n" +
+            "Content-Type: multipart/x-mixed-replace; " +
+            "boundary=frame\r\n" +
+            "Cache-Control: no-cache, no-store, " +
+            "must-revalidate, max-age=0\r\n" +
+            "Pragma: no-cache\r\n" +
+            "Expires: 0\r\n" +
+            "Connection: keep-alive\r\n" +
+            "X-Accel-Buffering: no\r\n" +
+            "\r\n";
 
-        output.write(
-                header.getBytes("UTF-8"));
+    output.write(
+            header.getBytes("UTF-8"));
 
-        output.flush();
+    output.flush();
 
-        byte[] lastSent = null;
+    byte[] lastSent = null;
 
-        while (running) {
+    while (running) {
 
-            byte[] frame =
-                    latestFrame;
+        byte[] frame =
+                latestFrame;
 
-            if (frame != null &&
-                    frame != lastSent) {
+        if (frame != null &&
+                frame != lastSent) {
 
-                String frameHeader =
-                        "--frame\r\n" +
-                        "Content-Type: image/jpeg\r\n" +
-                        "Content-Length: " +
-                        frame.length +
-                        "\r\n" +
-                        "Cache-Control: no-cache, " +
-                        "no-store, max-age=0\r\n" +
-                        "\r\n";
+            String frameHeader =
+                    "--frame\r\n" +
+                    "Content-Type: image/jpeg\r\n" +
+                    "Content-Length: " +
+                    frame.length +
+                    "\r\n" +
+                    "Cache-Control: no-cache, " +
+                    "no-store, max-age=0\r\n" +
+                    "\r\n";
 
-                output.write(
-                        frameHeader.getBytes("UTF-8"));
+            output.write(
+                    frameHeader.getBytes("UTF-8"));
 
-                output.write(frame);
+            output.write(frame);
 
-                output.write(
-                        "\r\n".getBytes("UTF-8"));
+            output.write(
+                    "\r\n".getBytes("UTF-8"));
 
-                output.flush();
+            output.flush();
 
-                lastSent = frame;
-            }
-
-            Thread.yield();
+            lastSent = frame;
         }
+
+        /*
+         * Не крутим процессор впустую.
+         * 2 мс практически не влияют
+         * на задержку передачи кадра.
+         */
+        Thread.sleep(2);
     }
+        }
+    
+
+    
 
     private void sendStatus(
             OutputStream output)
