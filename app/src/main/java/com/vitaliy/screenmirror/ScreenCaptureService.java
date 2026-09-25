@@ -222,30 +222,37 @@ public class ScreenCaptureService extends Service {
             }
 
             DisplayMetrics metrics =
-        new DisplayMetrics();
+                    new DisplayMetrics();
 
-display.getRealMetrics(metrics);
+            display.getRealMetrics(metrics);
 
-int width =
-        metrics.widthPixels;
+            int width =
+                    metrics.widthPixels;
 
-int height =
-        metrics.heightPixels;
+            int height =
+                    metrics.heightPixels;
 
-int density =
-        metrics.densityDpi;
+            int density =
+                    metrics.densityDpi;
 
-if (width > 720) {
+            /*
+             * Ограничиваем ширину 720 px.
+             * Это уже проверенный рабочий режим.
+             */
 
-    float scale =
-            720f / width;
+            if (width > 720) {
 
-    width =
-            Math.round(width * scale);
+                float scale =
+                        720f / width;
 
-    height =
-            Math.round(height * scale);
-}
+                width =
+                        Math.round(
+                                width * scale);
+
+                height =
+                        Math.round(
+                                height * scale);
+            }
 
             if (width <= 0 ||
                     height <= 0) {
@@ -265,12 +272,18 @@ if (width > 720) {
                     + "x"
                     + height;
 
+            /*
+             * Только 2 буфера.
+             * acquireLatestImage() будет выбрасывать
+             * устаревшие кадры вместо накопления задержки.
+             */
+
             imageReader =
                     ImageReader.newInstance(
                             width,
                             height,
                             PixelFormat.RGBA_8888,
-                            3);
+                            2);
 
             imageThread =
                     new HandlerThread(
@@ -290,6 +303,11 @@ if (width > 720) {
                                         null;
 
                                 try {
+
+                                    /*
+                                     * Берём самый свежий кадр.
+                                     * Старые кадры намеренно пропускаем.
+                                     */
 
                                     image =
                                             reader
@@ -370,9 +388,10 @@ if (width > 720) {
                                                     rowBytes *
                                                     imageHeight];
 
-                                    for (int y = 0;
-                                         y < imageHeight;
-                                         y++) {
+                                    for (
+                                            int y = 0;
+                                            y < imageHeight;
+                                            y++) {
 
                                         int sourcePosition =
                                                 y *
@@ -406,13 +425,21 @@ if (width > 720) {
                                             packedBuffer);
 
                                     ByteArrayOutputStream output =
-        new ByteArrayOutputStream();
+                                            new ByteArrayOutputStream();
 
-boolean compressed =
-        bitmap.compress(
-                Bitmap.CompressFormat.JPEG,
-                30,
-                output);
+                                    /*
+                                     * JPEG 25:
+                                     * немного легче для телефона,
+                                     * чем 30, и быстрее передаётся.
+                                     */
+
+                                    boolean compressed =
+                                            bitmap.compress(
+                                                    Bitmap.CompressFormat
+                                                            .JPEG,
+                                                    25,
+                                                    output);
+
                                     bitmap.recycle();
 
                                     if (!compressed) {
@@ -427,6 +454,11 @@ boolean compressed =
                                             output.toByteArray();
 
                                     if (frame.length > 0) {
+
+                                        /*
+                                         * Публикуем только готовый
+                                         * полностью закодированный кадр.
+                                         */
 
                                         latestFrame =
                                                 frame;
@@ -456,6 +488,7 @@ boolean compressed =
                                 } finally {
 
                                     if (image != null) {
+
                                         image.close();
                                     }
                                 }
@@ -599,20 +632,38 @@ boolean compressed =
                     new BufferedOutputStream(
                             socket.getOutputStream());
 
+            /*
+             * Основной видеопоток.
+             */
+
             if (requestLine.contains(
-        "GET /stream")) {
+                    "GET /stream")) {
 
-    sendMjpegStream(output);
+                sendMjpegStream(
+                        output);
 
-} else if (requestLine.contains(
-        "GET /status")) {
-
-                sendStatus(output);
-
-            } else {
-
-                sendWebPage(output);
+                return;
             }
+
+            /*
+             * Статус оставляем отдельным запросом.
+             */
+
+            if (requestLine.contains(
+                    "GET /status")) {
+
+                sendStatus(
+                        output);
+
+                return;
+            }
+
+            /*
+             * Всё остальное — главная страница.
+             */
+
+            sendWebPage(
+                    output);
 
         } catch (Exception e) {
 
@@ -631,155 +682,131 @@ boolean compressed =
     }
 
     private void sendWebPage(
-        OutputStream output)
-        throws Exception {
-
-    String html =
-            "<!DOCTYPE html>" +
-            "<html>" +
-            "<head>" +
-            "<meta name='viewport' " +
-            "content='width=device-width,initial-scale=1'>" +
-            "<style>" +
-            "html,body{" +
-            "margin:0;" +
-            "padding:0;" +
-            "background:#000;" +
-            "width:100%;" +
-            "height:100%;" +
-            "overflow:hidden;" +
-            "}" +
-            "#screen{" +
-            "width:100%;" +
-            "height:100%;" +
-            "object-fit:contain;" +
-            "}" +
-            "#status{" +
-            "position:fixed;" +
-            "left:0;" +
-            "top:0;" +
-            "right:0;" +
-            "padding:12px;" +
-            "box-sizing:border-box;" +
-            "color:white;" +
-            "background:rgba(0,0,0,.75);" +
-            "font-family:sans-serif;" +
-            "font-size:14px;" +
-            "z-index:10;" +
-            "}" +
-            "</style>" +
-            "</head>" +
-            "<body>" +
-            "<div id='status'>" +
-            "Подключение..." +
-            "</div>" +
-            "<img id='screen'>" +
-            "<script>" +
-"function updateFrame(){" +
-"document.getElementById('screen').src=" +
-"'/frame?t='+Date.now();" +
-"}" +
-"function updateStatus(){" +
-"fetch('/status?t='+Date.now())" +
-".then(function(r){" +
-"return r.text();" +
-"})" +
-".then(function(t){" +
-"document.getElementById('status')" +
-".textContent=t;" +
-"})" +
-".catch(function(){" +
-"document.getElementById('status')" +
-".textContent='SERVER_ERROR';" +
-"});" +
-"}" +
-"updateFrame();" +
-"updateStatus();" +
-"setInterval(updateStatus,1000);" +
-            "</script>" +
-            "</body>" +
-            "</html>";
-
-    byte[] bytes =
-            html.getBytes("UTF-8");
-
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: text/html; " +
-            "charset=UTF-8\r\n" +
-            "Content-Length: " +
-            bytes.length +
-            "\r\n" +
-            "Cache-Control: no-store\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
-
-    output.write(
-            header.getBytes("UTF-8"));
-
-    output.write(bytes);
-
-    output.flush();
-}
-
-    private void sendFrame(
             OutputStream output)
             throws Exception {
 
-        byte[] frame =
-                latestFrame;
+        String html =
+                "<!DOCTYPE html>" +
+                "<html>" +
+                "<head>" +
 
-        if (frame == null) {
+                "<meta name='viewport' " +
+                "content='width=device-width,initial-scale=1'>" +
 
-            String message =
-                    "WAITING_FOR_FRAME\n" +
-                    "ERROR: " +
-                    lastError;
+                "<style>" +
 
-            byte[] messageBytes =
-                    message.getBytes("UTF-8");
+                "html,body{" +
+                "margin:0;" +
+                "padding:0;" +
+                "background:#000;" +
+                "width:100%;" +
+                "height:100%;" +
+                "overflow:hidden;" +
+                "}" +
 
-            String header =
-                    "HTTP/1.1 503 Service Unavailable\r\n" +
-                    "Content-Type: text/plain; " +
-                    "charset=UTF-8\r\n" +
-                    "Content-Length: " +
-                    messageBytes.length +
-                    "\r\n" +
-                    "Cache-Control: no-store\r\n" +
-                    "Connection: close\r\n" +
-                    "\r\n";
+                "#screen{" +
+                "width:100%;" +
+                "height:100%;" +
+                "object-fit:contain;" +
+                "}" +
 
-            output.write(
-                    header.getBytes("UTF-8"));
+                "#status{" +
+                "position:fixed;" +
+                "left:0;" +
+                "top:0;" +
+                "right:0;" +
+                "padding:12px;" +
+                "box-sizing:border-box;" +
+                "color:white;" +
+                "background:rgba(0,0,0,.75);" +
+                "font-family:sans-serif;" +
+                "font-size:14px;" +
+                "z-index:10;" +
+                "}" +
 
-            output.write(
-                    messageBytes);
+                "</style>" +
 
-            output.flush();
+                "</head>" +
 
-            return;
-        }
+                "<body>" +
+
+                "<div id='status'>" +
+                "Подключение..." +
+                "</div>" +
+
+                /*
+                 * ВАЖНО:
+                 * теперь IMG получает непрерывный MJPEG-поток.
+                 */
+
+                "<img id='screen' " +
+                "src='/stream'>" +
+
+                "<script>" +
+
+                "function updateStatus(){" +
+
+                "fetch('/status?t='+Date.now())" +
+
+                ".then(function(r){" +
+                "return r.text();" +
+                "})" +
+
+                ".then(function(t){" +
+
+                "document.getElementById('status')" +
+                ".textContent=t;" +
+
+                "})" +
+
+                ".catch(function(){" +
+
+                "document.getElementById('status')" +
+                ".textContent='SERVER_ERROR';" +
+
+                "});" +
+
+                "}" +
+
+                "updateStatus();" +
+
+                "setInterval(updateStatus,1000);" +
+
+                "</script>" +
+
+                "</body>" +
+
+                "</html>";
+
+        byte[] bytes =
+                html.getBytes("UTF-8");
 
         String header =
                 "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: image/jpeg\r\n" +
+                "Content-Type: text/html; " +
+                "charset=UTF-8\r\n" +
                 "Content-Length: " +
-                frame.length +
+                bytes.length +
                 "\r\n" +
-                "Cache-Control: no-store, no-cache, " +
-                "must-revalidate\r\n" +
-                "Pragma: no-cache\r\n" +
+                "Cache-Control: no-store\r\n" +
                 "Connection: close\r\n" +
                 "\r\n";
 
         output.write(
                 header.getBytes("UTF-8"));
 
-        output.write(frame);
+        output.write(
+                bytes);
 
         output.flush();
     }
+
+    /*
+     * Непрерывный MJPEG-поток.
+     *
+     * Здесь больше нет отдельных запросов
+     * /frame каждые 10 миллисекунд.
+     */
 
     private void sendMjpegStream(
             OutputStream output)
@@ -789,7 +816,8 @@ boolean compressed =
                 "HTTP/1.1 200 OK\r\n" +
                 "Content-Type: multipart/x-mixed-replace; " +
                 "boundary=frame\r\n" +
-                "Cache-Control: no-cache, no-store\r\n" +
+                "Cache-Control: no-cache, no-store, " +
+                "must-revalidate\r\n" +
                 "Pragma: no-cache\r\n" +
                 "Connection: keep-alive\r\n" +
                 "\r\n";
@@ -806,6 +834,10 @@ boolean compressed =
             byte[] frame =
                     latestFrame;
 
+            /*
+             * Отправляем только новый кадр.
+             */
+
             if (frame != null &&
                     frame != lastSent) {
 
@@ -818,19 +850,28 @@ boolean compressed =
                         "\r\n";
 
                 output.write(
-                        frameHeader.getBytes("UTF-8"));
-
-                output.write(frame);
+                        frameHeader.getBytes(
+                                "UTF-8"));
 
                 output.write(
-                        "\r\n".getBytes("UTF-8"));
+                        frame);
+
+                output.write(
+                        "\r\n".getBytes(
+                                "UTF-8"));
 
                 output.flush();
 
-                lastSent = frame;
+                lastSent =
+                        frame;
             }
 
-            Thread.sleep(15);
+            /*
+             * Очень маленькая пауза,
+             * чтобы не крутить CPU впустую.
+             */
+
+            Thread.sleep(2);
         }
     }
 
@@ -858,7 +899,8 @@ boolean compressed =
         output.write(
                 header.getBytes("UTF-8"));
 
-        output.write(bytes);
+        output.write(
+                bytes);
 
         output.flush();
     }
@@ -961,10 +1003,10 @@ boolean compressed =
         super.onDestroy();
     }
 
-        @Override
+    @Override
     public IBinder onBind(
             Intent intent) {
 
         return null;
     }
-}
+    }
