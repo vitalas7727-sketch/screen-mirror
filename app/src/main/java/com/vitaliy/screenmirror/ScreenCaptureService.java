@@ -784,9 +784,11 @@ private void sendWebPage(
                 "Content-Type: multipart/x-mixed-replace; " +
                 "boundary=frame\r\n" +
                 "Cache-Control: no-cache, no-store, " +
-                "must-revalidate\r\n" +
+                "must-revalidate, max-age=0\r\n" +
                 "Pragma: no-cache\r\n" +
+                "Expires: 0\r\n" +
                 "Connection: keep-alive\r\n" +
+                "X-Accel-Buffering: no\r\n" +
                 "\r\n";
 
         output.write(
@@ -801,10 +803,6 @@ private void sendWebPage(
             byte[] frame =
                     latestFrame;
 
-            /*
-             * Отправляем только новый кадр.
-             */
-
             if (frame != null &&
                     frame != lastSent) {
 
@@ -814,33 +812,26 @@ private void sendWebPage(
                         "Content-Length: " +
                         frame.length +
                         "\r\n" +
+                        "Cache-Control: no-cache, " +
+                        "no-store, max-age=0\r\n" +
                         "\r\n";
 
                 output.write(
-                        frameHeader.getBytes(
-                                "UTF-8"));
+                        frameHeader.getBytes("UTF-8"));
+
+                output.write(frame);
 
                 output.write(
-                        frame);
-
-                output.write(
-                        "\r\n".getBytes(
-                                "UTF-8"));
+                        "\r\n".getBytes("UTF-8"));
 
                 output.flush();
 
-                lastSent =
-                        frame;
+                lastSent = frame;
             }
 
-            /*
-             * Очень маленькая пауза,
-             * чтобы не крутить CPU впустую.
-             */
-
-            Thread.sleep(2);
+            Thread.yield();
         }
-    }
+            }
 
     private void sendStatus(
             OutputStream output)
