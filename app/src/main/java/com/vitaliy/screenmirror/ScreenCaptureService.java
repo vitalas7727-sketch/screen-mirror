@@ -36,6 +36,19 @@ public class ScreenCaptureService extends Service {
 
     private static final int PORT = 8080;
 
+    /*
+     * Оптимизация задержки:
+     * меньший кадр быстрее кодируется,
+     * передаётся по Wi-Fi и декодируется ТВ.
+     */
+    private static final int MAX_WIDTH = 640;
+
+    /*
+     * JPEG ниже 25 уменьшает размер кадра.
+     * Для зеркалирования экрана 18 достаточно.
+     */
+    private static final int JPEG_QUALITY = 18;
+
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
@@ -133,7 +146,7 @@ public class ScreenCaptureService extends Service {
                 + " DATA="
                 + (data != null);
 
-        if (resultCode != -1 ||
+        if (resultCode == -1 ||
                 data == null) {
 
             lastError =
@@ -236,14 +249,21 @@ public class ScreenCaptureService extends Service {
                     metrics.densityDpi;
 
             /*
-             * Ограничиваем ширину 720 px.
-             * Это уже проверенный рабочий режим.
+             * Ограничиваем ширину 640 px.
+             *
+             * Это уменьшает:
+             * 1. объём захватываемых данных;
+             * 2. работу Bitmap;
+             * 3. время JPEG-кодирования;
+             * 4. размер кадра по Wi-Fi;
+             * 5. нагрузку браузера ТВ.
              */
 
-            if (width > 720) {
+            if (width > MAX_WIDTH) {
 
                 float scale =
-                        720f / width;
+                        (float) MAX_WIDTH /
+                        (float) width;
 
                 width =
                         Math.round(
@@ -273,11 +293,11 @@ public class ScreenCaptureService extends Service {
                     + height;
 
             /*
-             * Только 2 буфера.
-             * acquireLatestImage() будет выбрасывать
-             * устаревшие кадры вместо накопления задержки.
+             * Всего 2 изображения.
+             *
+             * acquireLatestImage() берёт только
+             * самый свежий кадр и отбрасывает старые.
              */
-
             imageReader =
                     ImageReader.newInstance(
                             width,
@@ -299,15 +319,9 @@ public class ScreenCaptureService extends Service {
                     .setOnImageAvailableListener(
                             reader -> {
 
-                                Image image =
-                                        null;
+                                Image image = null;
 
                                 try {
-
-                                    /*
-                                     * Берём самый свежий кадр.
-                                     * Старые кадры намеренно пропускаем.
-                                     */
 
                                     image =
                                             reader
@@ -417,27 +431,18 @@ public class ScreenCaptureService extends Service {
                                                     Bitmap.Config
                                                             .ARGB_8888);
 
-                                    ByteBuffer packedBuffer =
-                                            ByteBuffer.wrap(
-                                                    pixels);
-
                                     bitmap.copyPixelsFromBuffer(
-                                            packedBuffer);
+                                            ByteBuffer.wrap(
+                                                    pixels));
 
                                     ByteArrayOutputStream output =
                                             new ByteArrayOutputStream();
-
-                                    /*
-                                     * JPEG 25:
-                                     * немного легче для телефона,
-                                     * чем 30, и быстрее передаётся.
-                                     */
 
                                     boolean compressed =
                                             bitmap.compress(
                                                     Bitmap.CompressFormat
                                                             .JPEG,
-                                                    25,
+                                                    JPEG_QUALITY,
                                                     output);
 
                                     bitmap.recycle();
@@ -456,10 +461,10 @@ public class ScreenCaptureService extends Service {
                                     if (frame.length > 0) {
 
                                         /*
-                                         * Публикуем только готовый
-                                         * полностью закодированный кадр.
+                                         * Важный момент:
+                                         * публикуем только полностью
+                                         * готовый кадр.
                                          */
-
                                         latestFrame =
                                                 frame;
 
@@ -488,7 +493,6 @@ public class ScreenCaptureService extends Service {
                                 } finally {
 
                                     if (image != null) {
-
                                         image.close();
                                     }
                                 }
@@ -575,6 +579,16 @@ public class ScreenCaptureService extends Service {
                             Socket socket =
                                     serverSocket.accept();
 
+                            /*
+                             * TCP_NODELAY:
+                             * отключаем задержку мелких
+                             * TCP-пакетов.
+                             */
+                            try {
+                                socket.setTcpNoDelay(true);
+                            } catch (Exception ignored) {
+                            }
+
                             new Thread(
                                     () -> handleClient(
                                             socket),
@@ -632,10 +646,6 @@ public class ScreenCaptureService extends Service {
                     new BufferedOutputStream(
                             socket.getOutputStream());
 
-            /*
-             * Основной видеопоток.
-             */
-
             if (requestLine.contains(
                     "GET /stream")) {
 
@@ -645,10 +655,6 @@ public class ScreenCaptureService extends Service {
                 return;
             }
 
-            /*
-             * Статус оставляем отдельным запросом.
-             */
-
             if (requestLine.contains(
                     "GET /status")) {
 
@@ -657,10 +663,6 @@ public class ScreenCaptureService extends Service {
 
                 return;
             }
-
-            /*
-             * Всё остальное — главная страница.
-             */
 
             sendWebPage(
                     output);
@@ -681,99 +683,92 @@ public class ScreenCaptureService extends Service {
         }
     }
 
-private void sendWebPage(
-        OutputStream output)
-        throws Exception {
+    private void sendWebPage(
+            OutputStream output)
+            throws Exception {
 
-    String html =
-            "<!DOCTYPE html>" +
-            "<html>" +
-            "<head>" +
-            "<meta name='viewport' " +
-            "content='width=device-width,initial-scale=1'>" +
-            "<style>" +
-            "html,body{" +
-            "margin:0;" +
-            "padding:0;" +
-            "background:#000;" +
-            "width:100%;" +
-            "height:100%;" +
-            "overflow:hidden;" +
-            "}" +
-            "#screen{" +
-            "width:100%;" +
-            "height:100%;" +
-            "object-fit:contain;" +
-            "}" +
-            "#status{" +
-            "position:fixed;" +
-            "left:0;" +
-            "top:0;" +
-            "right:0;" +
-            "padding:12px;" +
-            "box-sizing:border-box;" +
-            "color:white;" +
-            "background:rgba(0,0,0,.75);" +
-            "font-family:sans-serif;" +
-            "font-size:14px;" +
-            "z-index:10;" +
-            "}" +
-            "</style>" +
-            "</head>" +
-            "<body>" +
-            "<div id='status'>" +
-            "Подключение..." +
-            "</div>" +
-            "<img id='screen' src='/stream'>" +
-            "<script>" +
-            "function updateStatus(){" +
-            "fetch('/status?t='+Date.now())" +
-            ".then(function(r){" +
-            "return r.text();" +
-            "})" +
-            ".then(function(t){" +
-            "document.getElementById('status')" +
-            ".textContent=t;" +
-            "})" +
-            ".catch(function(){" +
-            "document.getElementById('status')" +
-            ".textContent='SERVER_ERROR';" +
-            "});" +
-            "}" +
-            "updateStatus();" +
-            "setInterval(updateStatus,1000);" +
-            "</script>" +
-            "</body>" +
-            "</html>";
+        String html =
+                "<!DOCTYPE html>" +
+                "<html>" +
+                "<head>" +
+                "<meta name='viewport' " +
+                "content='width=device-width,initial-scale=1'>" +
+                "<style>" +
+                "html,body{" +
+                "margin:0;" +
+                "padding:0;" +
+                "background:#000;" +
+                "width:100%;" +
+                "height:100%;" +
+                "overflow:hidden;" +
+                "}" +
+                "#screen{" +
+                "width:100%;" +
+                "height:100%;" +
+                "object-fit:contain;" +
+                "}" +
+                "#status{" +
+                "position:fixed;" +
+                "left:0;" +
+                "top:0;" +
+                "right:0;" +
+                "padding:12px;" +
+                "box-sizing:border-box;" +
+                "color:white;" +
+                "background:rgba(0,0,0,.75);" +
+                "font-family:sans-serif;" +
+                "font-size:14px;" +
+                "z-index:10;" +
+                "}" +
+                "</style>" +
+                "</head>" +
+                "<body>" +
+                "<div id='status'>" +
+                "Подключение..." +
+                "</div>" +
+                "<img id='screen' src='/stream'>" +
+                "<script>" +
+                "function updateStatus(){" +
+                "fetch('/status?t='+Date.now())" +
+                ".then(function(r){" +
+                "return r.text();" +
+                "})" +
+                ".then(function(t){" +
+                "document.getElementById('status')" +
+                ".textContent=t;" +
+                "})" +
+                ".catch(function(){" +
+                "document.getElementById('status')" +
+                ".textContent='SERVER_ERROR';" +
+                "});" +
+                "}" +
+                "updateStatus();" +
+                "setInterval(updateStatus,1000);" +
+                "</script>" +
+                "</body>" +
+                "</html>";
 
-    byte[] bytes =
-            html.getBytes("UTF-8");
+        byte[] bytes =
+                html.getBytes("UTF-8");
 
-    String header =
-            "HTTP/1.1 200 OK\r\n" +
-            "Content-Type: text/html; " +
-            "charset=UTF-8\r\n" +
-            "Content-Length: " +
-            bytes.length +
-            "\r\n" +
-            "Cache-Control: no-store\r\n" +
-            "Connection: close\r\n" +
-            "\r\n";
+        String header =
+                "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: text/html; " +
+                "charset=UTF-8\r\n" +
+                "Content-Length: " +
+                bytes.length +
+                "\r\n" +
+                "Cache-Control: no-store\r\n" +
+                "Connection: close\r\n" +
+                "\r\n";
 
-    output.write(
-            header.getBytes("UTF-8"));
+        output.write(
+                header.getBytes("UTF-8"));
 
-    output.write(bytes);
+        output.write(bytes);
 
-    output.flush();
-        }
-    
-    /*
-     * Непрерывный MJPEG-поток.
-     *
-     * Здесь больше нет отдельных запросов
-     * /frame каждые 10 миллисекунд.
-     */
+        output.flush();
+    }
 
     private void sendMjpegStream(
             OutputStream output)
@@ -831,7 +826,7 @@ private void sendWebPage(
 
             Thread.yield();
         }
-            }
+    }
 
     private void sendStatus(
             OutputStream output)
@@ -857,8 +852,7 @@ private void sendWebPage(
         output.write(
                 header.getBytes("UTF-8"));
 
-        output.write(
-                bytes);
+        output.write(bytes);
 
         output.flush();
     }
