@@ -43,13 +43,13 @@ public class ScreenCaptureService extends Service {
      * 640 px сейчас используем как режим
      * минимальной задержки.
      */
-    private static final int MAX_WIDTH = 640;
+    private static final int MAX_WIDTH = 720;
 
     /*
      * Низкое качество JPEG уменьшает
      * размер передаваемого кадра.
      */
-    private static final int JPEG_QUALITY = 18;
+    private static final int JPEG_QUALITY = 22;
 
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
