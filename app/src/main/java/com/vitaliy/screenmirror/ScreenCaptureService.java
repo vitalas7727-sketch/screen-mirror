@@ -696,10 +696,12 @@ public class ScreenCaptureService extends Service {
                                     e);
                         }
 
-                    } finally {
 private void startWebServer() {
 
-    if (serverStarted) {
+    if (serverStarted &&
+            serverSocket != null &&
+            !serverSocket.isClosed()) {
+
         return;
     }
 
@@ -714,13 +716,15 @@ private void startWebServer() {
                     socket.setReuseAddress(true);
 
                     socket.bind(
-                            new java.net.InetSocketAddress(
+                            new InetSocketAddress(
                                     "0.0.0.0",
                                     PORT));
 
-                    serverSocket = socket;
+                    serverSocket =
+                            socket;
 
-                    serverStarted = true;
+                    serverStarted =
+                            true;
 
                     lastError =
                             "SERVER_STARTED_PORT="
@@ -731,14 +735,24 @@ private void startWebServer() {
                             "СЕРВЕР ЗАПУЩЕН: 0.0.0.0:"
                             + PORT);
 
-                    while (running) {
+                    while (running &&
+                            !serverSocket.isClosed()) {
 
                         Socket client =
                                 serverSocket.accept();
 
                         try {
 
-                            client.setTcpNoDelay(true);
+                            client.setTcpNoDelay(
+                                    true);
+
+                        } catch (Exception ignored) {
+                        }
+
+                        try {
+
+                            client.setKeepAlive(
+                                    true);
 
                         } catch (Exception ignored) {
                         }
@@ -752,7 +766,8 @@ private void startWebServer() {
 
                 } catch (Exception e) {
 
-                    serverStarted = false;
+                    serverStarted =
+                            false;
 
                     lastError =
                             "SERVER_ERROR "
@@ -765,7 +780,6 @@ private void startWebServer() {
                             "ScreenMirror",
                             "ОШИБКА СЕРВЕРА",
                             e);
-
                 }
 
             },
