@@ -597,106 +597,7 @@ public class ScreenCaptureService extends Service {
         }
     }
 
-    private void startWebServer() {
-
-        /*
-         * Если сервер уже действительно
-         * работает — ничего не делаем.
-         */
-        if (serverStarted &&
-                serverSocket != null &&
-                !serverSocket.isClosed()) {
-
-            return;
-        }
-
-        /*
-         * Важный момент:
-         * НЕ ставим serverStarted=true
-         * заранее.
-         *
-         * Сначала реально открываем порт.
-         */
-        new Thread(
-                () -> {
-
-                    try {
-
-                        ServerSocket newServerSocket =
-                                new ServerSocket();
-
-                        newServerSocket.setReuseAddress(
-                                true);
-
-                        newServerSocket.bind(
-                                new InetSocketAddress(
-                                        PORT));
-
-                        serverSocket =
-                                newServerSocket;
-
-                        serverStarted =
-                                true;
-
-                        lastError =
-                                "SERVER_OK PORT="
-                                + PORT;
-
-                        android.util.Log.i(
-                                "ScreenMirror",
-                                "СЕРВЕР ЗАПУЩЕН PORT="
-                                + PORT);
-
-                        while (running &&
-                                !serverSocket.isClosed()) {
-
-                            Socket socket =
-                                    serverSocket.accept();
-
-                            try {
-
-                                socket.setTcpNoDelay(
-                                        true);
-
-                            } catch (Exception ignored) {
-                            }
-
-                            try {
-
-                                socket.setKeepAlive(
-                                        true);
-
-                            } catch (Exception ignored) {
-                            }
-
-                            new Thread(
-                                    () -> handleClient(
-                                            socket),
-                                    "ScreenMirrorClient")
-                                    .start();
-                        }
-
-                    } catch (Exception e) {
-
-                        serverStarted =
-                                false;
-
-                        lastError =
-                                "SERVER_ERROR "
-                                + e.getClass()
-                                        .getSimpleName()
-                                + ": "
-                                + e.getMessage();
-
-                        if (running) {
-
-                            android.util.Log.e(
-                                    "ScreenMirror",
-                                    "ОШИБКА СЕРВЕРА",
-                                    e);
-                        }
-
-private void startWebServer() {
+   private void startWebServer() {
 
     if (serverStarted &&
             serverSocket != null &&
@@ -785,8 +686,8 @@ private void startWebServer() {
             },
             "ScreenMirrorServer")
             .start();
-}
-
+        } 
+    
     private void handleClient(
             Socket socket) {
 
