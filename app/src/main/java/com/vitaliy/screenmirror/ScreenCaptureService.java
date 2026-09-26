@@ -49,7 +49,7 @@ public class ScreenCaptureService extends Service {
      * Низкое качество JPEG уменьшает
      * размер передаваемого кадра.
      */
-    private static final int JPEG_QUALITY = 22;
+    private static final int JPEG_QUALITY = 28;
 
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
